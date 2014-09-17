@@ -6,8 +6,12 @@ Copyright (C) 2014 Madeleine Price Ball
 This software is shared under the "MIT License" license (aka "Expat License"),
 see LICENSE.TXT for full license text.
 """
-
+import bz2
+import gzip
 import json
+import os
+import re
+
 import requests
 from bs4 import BeautifulSoup
 
@@ -44,7 +48,7 @@ def get_ebi_info_set(accession, fields_list=None):
            "&result=read_run")
     if fields_list:
         fields = ','.join(fields_list)
-        url = url + "fields=%(fields)s" % {'fields': fields}
+        url = url + "&fields=%(fields)s" % {'fields': fields}
     req = get_ebi_url_response(url)
     ebi_data = [line.split('\t') for line in req.text.split('\n')]
     header_data = ebi_data[0]
@@ -64,39 +68,29 @@ def fetch_metadata_xml(accession):
             attr in soup('SAMPLE_ATTRIBUTE')}
 
 
-def get_info_studies(study_accessions=EBI_STUDY_ACCESSIONS):
-    """Get information from combined American Gut studies
+def _get_all_barcodes(accessions=EBI_STUDY_ACCESSIONS):
+    """Get barcodes for each sample accession in EBI data.
 
-    Returns a dict containing three key/values:
+    Barcodes are used to look up American Gut samples and associated
+    information for creating a dataset for Open Humans.
 
-      'samples':         dict of dicts. Keys are sample_accession, values are
-                         a dict containing EBI standard fields.
-
-      'sample_metadata': dict of dicts. Keys are sample_accession, values are
-                         SAMPLE_ATTRIBUTES parsed from EBI XML.
-
-      'participants':    dict of dicts. Keys are host_subject_id (as seen in
-                         sample_metadata), value is list of sample_accessions.
+    Returns a dict where keys are barcodes, values are sample accessions.
     """
-    samples = dict()
-    sample_metadata = dict()
-    participants = dict()
-    for acc in study_accessions:
-        ebi_info_set = get_ebi_info_set(accession=acc)
-        for sample_info in ebi_info_set:
-            sample_acc = sample_info['sample_accession']
-            samples[sample_acc] = sample_info
-            sample_metadata[sample_acc] = fetch_metadata_xml(sample_acc)
-            host_subject_id = sample_metadata[sample_acc]['host_subject_id']
-            if host_subject_id in participants:
-                participants[host_subject_id].append(sample_acc)
-            else:
-                participants[host_subject_id] = [sample_acc]
-    output = {'samples': samples,
-              'sample_metadata': sample_metadata,
-              'participants': participants}
-    return output
+    acc_from_barcode = {}
+    fields_list = ['sample_accession', 'submitted_ftp']
+    fastq_name_regex = re.compile(r'seqs_(?P<barcode>[0-9]+)' +
+                                  r'\..*(|\.gz|\.bz2)$')
+    for acc in accessions:
+        ebi_info_set = get_ebi_info_set(accession=acc, fields_list=fields_list)
+        for sample_info in ebi_info_set[1:]:
+            filename = os.path.basename(sample_info['submitted_ftp'])
+            try:
+                barcode = fastq_name_regex.match(filename).group('barcode')
+            except AttributeError:
+                continue
+            acc_from_barcode[barcode] = sample_info['sample_accession']
+    return acc_from_barcode
 
 if __name__ == "__main__":
-    output = get_info_studies()
-    print json.dumps(output, sort_keys=True, indent=2)
+    acc_from_barcode = _get_all_barcodes()
+    print json.dumps(acc_from_barcode, indent=2)
