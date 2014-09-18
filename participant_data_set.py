@@ -2,6 +2,7 @@
 Create and manage participant-specific research dataset TarFile.
 """
 import bz2
+from datetime import datetime
 import json
 import gzip
 import re
@@ -14,31 +15,72 @@ import tempfile
 METADATA_SUFFIX = '.metadata.json'
 
 
-class MyDataSet(object):
-    """Create and manage a participant data set tarfile."""
+class OHDataSet(object):
+    """Create and manage a participant dataset, managed as a tarfile.
+
+    _Notes_
+
+    An OHDataSet is just a tarfile, with some constraints:
+      - All data is contained within a single directory in the tar, with the
+        same name as the basename for the file. (i.e. typical tar etiquette)
+      - The first file in the tarfile is a JSON-format file containing metadata
+        about the OHDataSet. It is named '[basename].metadata.json'.
+
+    For any modes that perform writing or editing, an uncompressed version of
+    the data is created in a temporary directory. The .close() method MUST be
+    called to create the new OHDataSet tarfile and clean the tempdir.
+
+    _Attributes_
+
+    basename   The base filename for the dataset, derived from the filename
+               provided on init. 'sample-q9f.tar.gz' has basename 'sample-q9f'.
+
+    filetype   Compression type ('', 'gz', or 'bz2'), from filename suffix.
+               e.g. 'sample-q9fe.tar.bz2' has compression type 'bz2'
+
+    mode       File read/edit mode ('r', 'r+', 'a', or 'w'), specified on init.
+               'r': read-only. 'w': write - will overwrite if filename exists.
+               'r+' or 'a': amend existing file, create one if none exists.
+
+    metadata   Information about data in the OHDataSet.
+
+    tempdir    Location of temporary directory used for write/edit in 'r+',
+               'a', and 'w' modes.
+    """
 
     def __init__(self, *args, **kwargs):
-        """Open or create a MyDataSet tarfile."""
+        """Open or create an OHDataset.
+
+        _Required arguments_
+        mode      'r', 'r+', 'a', or 'w'
+        filename   Must end in .tar, .tar.gz, or .tar.bz2.
+        """
         self.filename = kwargs['filename']
+        (self.basename,
+         self.filetype) = self._parse_tar_filename(kwargs['filename'])
         self.mode = kwargs['mode']
-        assert self.mode in ['r', 'r+', 'a', 'w']
-        self.basename, self.filetype = self._parse_filename(self.filename)
-        self.md_name = self.basename + METADATA_SUFFIX
+        assert self.mode in ['r', 'r+', 'a', 'w'], "Mode not valid"
         self.tempdir = None
-        self.metadata = None
+        self.metadata = {}
 
         if self.mode == 'r':
             try:
                 self.tarfile = tarfile.open(self.filename)
+                self.metadata = self._extract_metadata
             except:
                 raise ValueError("Not available for reading: " + self.filename)
-        elif self.mode == 'w':
-            self._create_new_dataset(*args, **kwargs)
         else:
-            self._copy_into_tempdir()
+            self.tempdir = os.path.join(tempfile.mkdtemp(), self.basename)
+            os.mkdir(self.tempdir)
+            if self.mode == 'a' or self.mode == 'r+':
+                old = tarfile.open(self.filename, 'r')
+                self._copy_into_tempdir(old)
+                old.close()
 
-    def _parse_filename(self, filename):
+    @staticmethod
+    def _parse_tar_filename(filename_str):
         """Parse filename for basename and filetype."""
+        filename = os.path.basename(filename_str)
         filename_split = re.split(r'\.tar', filename)
         basename = filename_split[0]
         filetype = filename_split[1].lstrip('.')
@@ -47,35 +89,33 @@ class MyDataSet(object):
                              "'.tar', 'tar.gz', or 'tar.bz2'.")
         return basename, filetype
 
-    def _copy_into_tempdir(self):
+    @classmethod
+    def extract_metadata(cls, target_tarfile):
+        """Get metadata content from an OHDataSet tarfile."""
+        if not target_tarfile or not target_tarfile.name:
+            raise ValueError("Expects TarFile with associated filename.")
+        basename, _ = cls._parse_tar_filename(target_tarfile.name)
+        metadata_fp = os.path.join(basename, basename + METADATA_SUFFIX)
+        metadata_content = target_tarfile.extractfile(metadata_fp).readlines()
+        return json.loads(metadata_content)
+
+    def _update_metadata_file(self):
+        """Update metadata file with current object metadata."""
+        assert self.mode in ['r+', 'a', 'w']
+        metadata_fp = os.path.join(self.tempdir, self.basename,
+                                   self.basename + METADATA_SUFFIX)
+        metadata_fh = open(metadata_fp, 'w')
+        metadata_fh.write(json.dumps(self.metadata, indent=2) + '\n')
+        metadata_fh.close()
+
+    def _copy_into_tempdir(self, old):
         """Copy existing dataset into tempdir for editing"""
         extraction_tempdir = tempfile.mkdtemp()
-        print "Created temporary directory: " + extraction_tempdir
-        tfile = tarfile.open(self.filename, 'r')
-        tfile.extractall(extraction_tempdir)
-        tfile.close()
-        self.tempdir = tempfile.mkdtemp()
-        print "Created temporary directory: " + self.tempdir
-        files_dir = os.path.join(extraction_tempdir, self.basename)
-        print "Copying " + files_dir + " to " + self.tempdir
-        for item in os.listdir(files_dir):
-            shutil.move(os.path.join(files_dir, item), self.tempdir)
-        print "Removing temporary directory: " + extraction_tempdir
+        old.extractall(extraction_tempdir)
+        old_filesdir = os.path.join(extraction_tempdir, self.basename)
+        for item in os.listdir(old_filesdir):
+            shutil.move(os.path.join(old_filesdir, item), self.tempdir)
         shutil.rmtree(extraction_tempdir)
-
-    def _create_new_dataset(self, **kwargs):
-        """Initialize the dataset with an optional metadata file"""
-        self.tempdir = tempfile.mkdtemp()
-        print "Created temporary directory: " + self.tempdir
-
-        # Initialize metadata
-        if 'metadata' in kwargs:
-            self.metadata = kwargs['metadata']
-        else:
-            self.metadata = {}
-        metadata_file = open(os.path.join(self.tempdir, self.md_name), 'w')
-        metadata_file.write(json.dumps(self.metadata, indent=2) + '\n')
-        metadata_file.close()
 
     def add_remote_file(self, url):
         """Fetch remote file, add to tempdir. Uncompress if gz or bz2."""
@@ -97,6 +137,9 @@ class MyDataSet(object):
             tempf.seek(0)
             out = tempf
             basename = local_filename
+        rettime = datetime.isoformat(datetime.utcnow().replace(microsecond=0))
+        self.metadata[local_filename] = {'retrieved_from': url,
+                                         'retrieval_time': rettime}
         local_filepath = os.path.join(self.tempdir, basename)
         file_out = open(local_filepath, 'wb')
         file_out.writelines(out)
@@ -109,9 +152,13 @@ class MyDataSet(object):
         assert self.mode in ['r+', 'a', 'w']
         self.tarfile = tarfile.open(self.filename, mode='w:' + self.filetype)
         # Add the metadata file first so it's at the beginning of the tarfile.
-        self.tarfile.add(os.path.join(self.tempdir, self.md_name),
-                         arcname=os.path.join(self.basename, self.md_name))
-        os.remove(os.path.join(self.tempdir, self.md_name))
+        md_filename = self.basename + METADATA_SUFFIX
+        with open(os.path.join(self.tempdir, md_filename), 'w') as mdfile:
+            mdfile.write(json.dumps(self.metadata,
+                                    indent=2, sort_keys=True) + '\n')
+        self.tarfile.add(os.path.join(self.tempdir, md_filename),
+                         arcname=os.path.join(self.basename, md_filename))
+        os.remove(os.path.join(self.tempdir, md_filename))
         # Now add the rest.
         for item in os.listdir(self.tempdir):
             self.tarfile.add(os.path.join(self.tempdir, item),

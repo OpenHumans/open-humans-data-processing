@@ -15,6 +15,10 @@ import re
 import requests
 from bs4 import BeautifulSoup
 
+from participant_data_set import OHDataSet
+
+BARCODE_TO_SAMPACC_FILE = 'american_gut_barcode_to_sample_accession.json'
+
 EBI_STUDY_ACCESSIONS = ['ERP003819',
                         'ERP003820',
                         'ERP003821',
@@ -77,20 +81,31 @@ def _get_all_barcodes(accessions=EBI_STUDY_ACCESSIONS):
     Returns a dict where keys are barcodes, values are sample accessions.
     """
     acc_from_barcode = {}
-    fields_list = ['sample_accession', 'submitted_ftp']
-    fastq_name_regex = re.compile(r'seqs_(?P<barcode>[0-9]+)' +
-                                  r'\..*(|\.gz|\.bz2)$')
+    fields_list = ['sample_accession', 'library_name']
     for acc in accessions:
         ebi_info_set = get_ebi_info_set(accession=acc, fields_list=fields_list)
-        for sample_info in ebi_info_set[1:]:
-            filename = os.path.basename(sample_info['submitted_ftp'])
-            try:
-                barcode = fastq_name_regex.match(filename).group('barcode')
-            except AttributeError:
-                continue
+        for sample_info in ebi_info_set:
+            # Notes on barcodes: The standard barcode seems to be 9 digits,
+            # but many don't match this pattern. Most are probably blanks and
+            # other controls. To be safe, we save information for all of them.
+            barcode = sample_info['library_name'].split(':')[0]
             acc_from_barcode[barcode] = sample_info['sample_accession']
     return acc_from_barcode
 
+
+def create_AmGut_OHDataSet(barcode):
+    with open(BARCODE_TO_SAMPACC_FILE) as filedata:
+        barcode_to_sampacc = json.loads(''.join(filedata.readlines()))
+    ebi_information = get_ebi_info_set(accession=barcode_to_sampacc[barcode])
+    # ebi_metadata = fetch_metadata_xml(accession=barcode_to_sampacc[barcode])
+    dataset_filename = 'AmericanGut-' + barcode + '-dataset.tar.gz'
+    dataset = OHDataSet(filename=dataset_filename, mode='w')
+    dataset.add_remote_file('http://' + ebi_information[0]['submitted_ftp'])
+    dataset.close()
+
 if __name__ == "__main__":
-    acc_from_barcode = _get_all_barcodes()
-    print json.dumps(acc_from_barcode, indent=2)
+    create_AmGut_OHDataSet('000007080')
+
+    # Create barcodes to sample accession file.
+    # acc_from_barcode = _get_all_barcodes()
+    # print json.dumps(acc_from_barcode, indent=2)
