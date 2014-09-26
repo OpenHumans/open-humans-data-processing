@@ -7,6 +7,7 @@ This software is shared under the "MIT License" license (aka "Expat License"),
 see LICENSE.TXT for full license text.
 """
 import json
+import re
 import tempfile
 
 import requests
@@ -100,20 +101,36 @@ def create_AmGut_OHDataSet(barcode):
     dataset_filename = 'AmericanGut-' + barcode + '-dataset.tar.gz'
     dataset = OHDataSet(filename=dataset_filename, mode='w', source=source)
     fastq_url = 'http://' + ebi_information[0]['submitted_ftp']
+
     print "Adding remote file from " + fastq_url
     dataset.add_remote_file(url=fastq_url)
+
     print "Adding ebi_information.json file"
     with tempfile.TemporaryFile() as ebi_information_file:
         ebi_information_file.write(json.dumps(ebi_information[0],
                                    indent=2, sort_keys=True) + '\n')
         ebi_information_file.seek(0)
         dataset.add_file(file=ebi_information_file, name='ebi_information.json')
+
+    print "Adding ebi_metadata.tsv file"
+    with tempfile.TemporaryFile() as ebi_metadata_tsv_file:
+        keys = sorted(ebi_metadata.keys())
+        # Unclear if incoming data is clean, so pro-actively removing tabs.
+        header = '#' + '\t'.join([re.sub('\t', '    ', k) for k in keys])
+        ebi_metadata_tsv_file.write(header + '\n')
+        values = '\t'.join([re.sub('\t', '    ', ebi_metadata[k]) for
+                            k in keys])
+        ebi_metadata_tsv_file.write(values + '\n')
+        ebi_metadata_tsv_file.seek(0)
+        dataset.add_file(file=ebi_metadata_tsv_file, name='ebi_metadata.tsv')
+
     print "Adding ebi_metadata.json file"
-    with tempfile.TemporaryFile() as ebi_metadata_file:
-        ebi_metadata_file.write(json.dumps(ebi_metadata,
-                                indent=2, sort_keys=True) + '\n')
-        ebi_metadata_file.seek(0)
-        dataset.add_file(file=ebi_metadata_file, name='ebi_metadata.json')
+    with tempfile.TemporaryFile() as ebi_metadata_json_file:
+        ebi_metadata_json_file.write(json.dumps(ebi_metadata,
+                                     indent=2, sort_keys=True) + '\n')
+        ebi_metadata_json_file.seek(0)
+        dataset.add_file(file=ebi_metadata_json_file, name='ebi_metadata.json')
+
     dataset.close()
 
 if __name__ == "__main__":
