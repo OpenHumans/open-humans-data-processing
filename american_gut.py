@@ -104,7 +104,7 @@ def create_AmGut_OHDataSet(barcode):
     dataset.add_remote_file(url=fastq_url)
     print "Adding ebi_information.json file"
     with tempfile.TemporaryFile() as ebi_information_file:
-        ebi_information_file.write(json.dumps(ebi_information,
+        ebi_information_file.write(json.dumps(ebi_information[0],
                                    indent=2, sort_keys=True) + '\n')
         ebi_information_file.seek(0)
         dataset.add_file(file=ebi_information_file, name='ebi_information.json')
