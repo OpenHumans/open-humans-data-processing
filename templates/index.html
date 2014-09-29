@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+
+{% block title %}Welcome to the 23andMe API example client{% endblock title %}
+
+{% block body %}
+<style>li { margin-bottom: 10px; }</style>
+
+<h1>Open Humans Data Export for 23andme data</h1>
+
+<p>This tool will access your 23andme account and, with your permission,
+receive a copy of your full 23andme genotyping data set.</p>
+
+<p>To do this, we will need to request access to the following:</p>
+
+<ul>
+  <li><b>Basic information</b><br/>
+    Profile identifiers and whether each profile has been genotyped. (Some
+    accounts have profiles for more than one individual.)</li>
+  <li><b>Names</b><br/>
+    Names help you select which profile in the account is yours (i.e. the one
+    you are exporting). Even for accounts with only one profile, your name is
+    an important validation to confirm that you are exporting the correct data
+    set. These names are <b>not</b> recorded in your Open Humans data set, they
+    are only accessed to facilitate your export of the 23andme data.</li>
+  <li><b>Full genotype</b><br/>
+    The purpose of this export tool is to access this data and process it to
+    create a data set that may be managed by you within Open Humans. We will
+    only export genotyping data for the profile you select.</li>
+</ul>
+
+<a class="btn" href="{{auth_url}}">Go to 23andme to share authorization</a>
+{% endblock body %}

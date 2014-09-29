@@ -1,4 +1,14 @@
+Flask==0.10.1
+Jinja2==2.7.3
+MarkupSafe==0.23
+PyJWT==0.2.1
+Werkzeug==0.9.6
 beautifulsoup4==4.3.2
-certifi==14.05.14
+itsdangerous==0.24
 lxml==3.3.6
+oauthlib==0.6.3
+python-openid==2.2.5
+python-social-auth==0.2.1
 requests==2.4.0
+requests-oauthlib==0.4.1
+six==1.8.0
