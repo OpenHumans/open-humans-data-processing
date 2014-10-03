@@ -5,15 +5,23 @@ Copyright (C) 2014 Madeleine Price Ball
 
 This software is shared under the "MIT License" license (aka "Expat License"),
 see LICENSE.TXT for full license text.
+
+May be used on the command line. For example, the following command:
+   python american_gut.py 000007080
+
+Will assemble a data set for the barcode 000007080 in a local file named:
+   AmericanGut-000007080-dataset.tar.gz
+
 """
 import json
 import re
+import sys
 import tempfile
 
 import requests
 from bs4 import BeautifulSoup
 
-from participant_data_set import OHDataSource, OHDataSet
+from .participant_data_set import OHDataSource, OHDataSet
 
 BARCODE_TO_SAMPACC_FILE = 'american_gut_barcode_to_sample_accession.json'
 
@@ -134,8 +142,4 @@ def create_AmGut_OHDataSet(barcode):
     dataset.close()
 
 if __name__ == "__main__":
-    create_AmGut_OHDataSet('000007080')
-
-    # Create barcodes to sample accession file.
-    # acc_from_barcode = _get_all_barcodes()
-    # print json.dumps(acc_from_barcode, indent=2)
+    create_AmGut_OHDataSet(sys.argv[1])
