@@ -59,7 +59,9 @@ def receive_23andme():
         headers=oauth_23andme.auth_headers(),
         method=oauth_23andme.ACCESS_TOKEN_METHOD
     )
+    print token_data
     user_data_basic = oauth_23andme.user_data_basic(token_data['access_token'])
+    print user_data_basic
     return flask.render_template('receive_code.html',
                                  retrieved_data=user_data_basic)
 
