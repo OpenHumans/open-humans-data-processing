@@ -10,6 +10,7 @@ see LICENSE.TXT for full license text.
 from datetime import date
 import json
 import os
+import re
 import requests
 import subprocess
 from subprocess import call, check_output
@@ -18,11 +19,14 @@ import time
 
 from .participant_data_set import OHDataSource, OHDataSet
 
-SNP_DATA_23ANDME_FILE = os.path.join(os.path.dirname(__file__),
-                                     '23andme_API_snps_data_with_ref.txt')
+SNP_DATA_23ANDME_FILE = os.path.join(
+    os.path.dirname(__file__),
+    '23andme_API_snps_data_with_ref_sorted.txt')
+# Was used to generate reference genotypes in the previous file.
+REFERENCE_GENOME_URL = ("http://hgdownload-test.cse.ucsc.edu/" +
+                        "goldenPath/hg19/bigZips/hg19.2bit")
 
-CHROM_SORT_ORDER_FILE = os.path.join(os.path.dirname(__file__),
-                                     'chrom_sort_order.txt')
+API23ANDME_Y_REGIONS_JSON = 'data_retrieval/23andme_y_chrom_regions.json'
 
 VCF_FIELDS = ['CHROM', 'POS', 'ID', 'REF', 'ALT', 'QUAL', 'FILTER',
               'INFO', 'FORMAT', '23ANDME_DATA']
@@ -36,7 +40,7 @@ CHROM_INDEX = {"1": 1, "2": 2, "3": 3, "4": 4, "5": 5,
 
 
 def snp_data_23andme():
-    """Generator, returns SNP data for each position"""
+    """Generator, returns SNP info sorted by chrom and position."""
     snp_data_file = open(SNP_DATA_23ANDME_FILE)
     next_line = snp_data_file.next()
     while next_line.startswith('#'):
@@ -50,7 +54,7 @@ def snp_data_23andme():
 
 
 def api23andme_full_gen_data(access_token, profile_id):
-    """Get full genotype data from 23andme API"""
+    """Get full genotype data from 23andme API."""
     headers = {'Authorization': 'Bearer %s' % access_token}
     genome_data_url = "http://api.23andme.com/1/genomes/%s" % profile_id
     genome_data_response = requests.get(genome_data_url, headers=headers)
@@ -58,21 +62,29 @@ def api23andme_full_gen_data(access_token, profile_id):
     return genome_data
 
 
-def vcf_header():
+def api23andme_full_gen_infer_sex(genetic_data):
+    y_regions = json.load(open(API23ANDME_Y_REGIONS_JSON))
+    y_seqs = ''.join([data[x[0]*2:x[0]*2+x[1]*2] for x in y_regions])
+    if re.search(r'[ACGT]', y_seqs):
+        return "Male"
+    else:
+        return "Female"
+
+
+def vcf_header(source=None, reference=None, format_info=None):
+    """Generate a VCF header."""
     header = []
-    header.append("##fileformat=VCFv4.2")
+    header.append("##fileformat=VCFv4.1")
     header.append("##fileDate=%s%s%s" %
                   (str(date.today().year),
                    str(date.today().month).zfill(2),
                    str(date.today().day).zfill(2)))
-    commit = check_output(["git", "rev-parse", "HEAD"]).rstrip('\n')
-    header.append("##source=open_humans_data_extraction." +
-                  "twenty_three_and_me, commit:%s" % commit)
-    ref_url = ("http://hgdownload-test.cse.ucsc.edu/" +
-               "goldenPath/hg19/bigZips/hg19.2bit")
-    header.append("##reference=%s" % ref_url)
-    header.append('##FORMAT=<ID=GT,Number=1,Type=String,' +
-                  'Description="Genotype">')
+    if source:
+        header.append("##source=" + source)
+    if reference:
+        header.append("##reference=%s" % reference)
+    for item in format_info:
+        header.append("##FORMAT=" + item)
     header.append('#' + '\t'.join(VCF_FIELDS))
     return header
 
@@ -80,10 +92,12 @@ def vcf_header():
 def api23andme_to_vcf_rows(genetic_data):
     """Convert 23andme locations to unsorted VCF lines"""
     snp_info_data = snp_data_23andme()
-    for i in range(0, len(genetic_data), 2):
-        genotype = genetic_data[i:i+2]
-        snp_info = snp_info_data.next()
+    for snp_info in snp_info_data:
+        index = int(snp_info[0]) * 2
+        genotype = genetic_data[index:index+2]
         if snp_info[4] == '_' or genotype == '__':
+            continue
+        if not re.match(r'^[ACGT]{2}$', genotype):
             continue
         vcf_data = {x:'.' for x in VCF_FIELDS}
         vcf_data['CHROM'] = snp_info[2]
@@ -105,67 +119,39 @@ def api23andme_to_vcf_rows(genetic_data):
         yield '\t'.join([vcf_data[x] for x in VCF_FIELDS])
 
 
-def sort_vcf_rows(vcf_rows):
-    os.environ['LANG']='en_EN'
-    vcf_rows_unsorted_file = NamedTemporaryFile()
-    sorted_chrom_sort_order_file = NamedTemporaryFile()
-    vcf_rows_sorted_file = NamedTemporaryFile()
-    for line in vcf_rows:
-        vcf_rows_unsorted_file.write(line + '\n')
-
-    # Preparation for later join.
-    # LANG=en_EN specified to solve possible inconsistent sort
-    # algorithms used by 'sort' and 'join'.
-    sortcall = ['sort', '-k1', CHROM_SORT_ORDER_FILE]
-    subprocess.Popen(sortcall, stdout=sorted_chrom_sort_order_file)
-
-    # Initial VCF sort, preparation for later join.
-    sort_vcf_init = ['sort', '-k1', '-k2',
-                     vcf_rows_unsorted_file.name]
-    call(sort_vcf_init, stdout=vcf_rows_sorted_file)
-    # Join VCF rows with the sort order key.
-    join_command = ['join', '-t', "'\t'", '-11', '-11',
-                    sorted_chrom_sort_order_file.name, '-']
-    # Sort according to the sort order key (2) and position (3)
-    sort_vcf = ['sort', '-k2n', '-k3n']
-    # Cut out the key and output.
-    cut_key = ['cut', '-d', "'\t'", '-f', '1,3-11']
-
-    full_command = sort_vcf_init + ['|'] + join_command + ['|'] + sort_vcf + ['|'] + cut_key + ['>', vcf_rows_sorted_file.name]
-    full_command_string = ' '.join(full_command)
-    print full_command_string
-    call(full_command_string, shell=True)
-
-    vcf_rows_sorted_file.seek(0)
-    for line in vcf_rows_sorted_file:
-        yield line
-
-
 def api23andme_to_vcf(genetic_data):
-    unsorted_vcf_rows = api23andme_to_vcf_rows(genetic_data)
-    sorted_vcf_rows = sort_vcf_rows(unsorted_vcf_rows)
-    for line in vcf_header():
+    commit = check_output(["git", "rev-parse", "HEAD"]).rstrip('\n')
+    source = ("open_humans_data_extraction.twenty_three_and_me," +
+              "commit:%s" % commit)
+    reference = REFERENCE_GENOME_URL
+    format_info = ['<ID=GT,Number=1,Type=String,Description="Genotype">']
+    vcf_header_lines = vcf_header(source=source, 
+                                  reference=reference, 
+                                  format_info=format_info)
+    for line in vcf_header_lines:
         yield line + '\n'
-    for line in sorted_vcf_rows:
-        yield line
+    vcf_rows = api23andme_to_vcf_rows(genetic_data)
+    for line in vcf_rows:
+        yield line + '\n'
 
 
 def api23andme_to_23andmeraw(genetic_data):
     snp_info_data = snp_data_23andme()
-    for i in range(0, len(genetic_data), 2):
-        genotype = genetic_data[i:i+2]
-        snp_info = snp_info_data.next()
+    for snp_info in snp_info_data:
+        index = int(snp_info[0]) * 2
+        genotype = genetic_data[index:index+2]
         data = [snp_info[1], snp_info[2], snp_info[3], genotype]
         yield '\t'.join(data) + '\n'
 
 
 def create_23andme_OHDataSet(access_token, profile_id, file_id):
     data_23andme = api23andme_full_gen_data(access_token, profile_id)
-    data_vcf = api23andme_to_vcf(data_23andme)
+    sex_inferred = api23andme_full_gen_infer_sex(data_23andme)
+    data_vcf = api23andme_to_vcf(data_23andme, sex_inferred)
     output = open('temp.vcf', 'w')
     for line in data_vcf:
         output.write(line)
-    data_23andmeraw = api23andme_to_23andmeraw(data_23andme)
+    data_23andmeraw = api23andme_to_23andmeraw(data_23andme, sex_inferred)
     output2 = open('temp.txt', 'w')
     for line in data_23andmeraw:
         output2.write(line)
