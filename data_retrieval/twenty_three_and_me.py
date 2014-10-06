@@ -7,7 +7,7 @@ This software is shared under the "MIT License" license (aka "Expat License"),
 see LICENSE.TXT for full license text.
 
 """
-from datetime import date
+from datetime import date, datetime
 import json
 import os
 import re
@@ -22,6 +22,7 @@ from .participant_data_set import OHDataSource, OHDataSet
 SNP_DATA_23ANDME_FILE = os.path.join(
     os.path.dirname(__file__),
     '23andme_API_snps_data_with_ref_sorted.txt')
+
 # Was used to generate reference genotypes in the previous file.
 REFERENCE_GENOME_URL = ("http://hgdownload-test.cse.ucsc.edu/" +
                         "goldenPath/hg19/bigZips/hg19.2bit")
@@ -30,13 +31,6 @@ API23ANDME_Y_REGIONS_JSON = 'data_retrieval/23andme_y_chrom_regions.json'
 
 VCF_FIELDS = ['CHROM', 'POS', 'ID', 'REF', 'ALT', 'QUAL', 'FILTER',
               'INFO', 'FORMAT', '23ANDME_DATA']
-
-CHROM_INDEX = {"1": 1, "2": 2, "3": 3, "4": 4, "5": 5,
-               "6": 6, "7": 7, "8": 8, "9": 9, "10": 10,
-               "11": 11, "12": 12, "13": 13, "14": 14, "15": 15,
-               "16": 16, "17": 17, "18": 18, "19": 19, "20": 20,
-               "21": 21, "22": 22, "X": 23, "Y": 24, "M": 25, "MT": 25,
-               }
 
 
 def snp_data_23andme():
@@ -63,8 +57,9 @@ def api23andme_full_gen_data(access_token, profile_id):
 
 
 def api23andme_full_gen_infer_sex(genetic_data):
+    """Check some known Y genotype calls to infer sex."""
     y_regions = json.load(open(API23ANDME_Y_REGIONS_JSON))
-    y_seqs = ''.join([data[x[0]*2:x[0]*2+x[1]*2] for x in y_regions])
+    y_seqs = ''.join([genetic_data[x[0]*2:x[0]*2+x[1]*2] for x in y_regions])
     if re.search(r'[ACGT]', y_seqs):
         return "Male"
     else:
@@ -89,15 +84,44 @@ def vcf_header(source=None, reference=None, format_info=None):
     return header
 
 
-def api23andme_to_vcf_rows(genetic_data):
-    """Convert 23andme locations to unsorted VCF lines"""
+def get_genotype(genetic_data, snp_info, sex):
+    """Get genotype, collapsing hemizygous locations."""
+    raw_genotype = genetic_data[int(snp_info[0])*2:int(snp_info[0])*2+2]
+    if snp_info[2] in ['MT', 'M', 'Y', 'chrM', 'chrMT', 'chrY']:
+        try:
+            assert raw_genotype[0] == raw_genotype[1]
+        except AssertionError:
+            print raw_genotype
+            print snp_info
+            print sex
+            raise SystemError
+        return raw_genotype[0]
+    if sex == 'Male' and snp_info[2] in ['X', 'chrX']:
+        # PAR X coordinates for hg19 according to UCSC are:
+        # chrX:60001-2699520 and chrX:154931044-155260560
+        if (60001 <= int(snp_info[3]) <= 2699520 or
+            154931044 <= int(snp_info[3]) <= 155260560):
+            return raw_genotype
+        else:
+            try:
+                assert raw_genotype[0] == raw_genotype[1]
+            except AssertionError:
+                print raw_genotype
+                print snp_info
+                print sex
+                raise SystemError
+            return raw_genotype[0]
+    return raw_genotype
+
+
+def api23andme_to_vcf_rows(genetic_data, sex):
+    """Convert 23andme locations to unsorted VCF lines."""
     snp_info_data = snp_data_23andme()
     for snp_info in snp_info_data:
-        index = int(snp_info[0]) * 2
-        genotype = genetic_data[index:index+2]
-        if snp_info[4] == '_' or genotype == '__':
+        genotype = get_genotype(genetic_data, snp_info, sex)
+        if snp_info[4] == '_' or genotype == '__' or genotype == '--':
             continue
-        if not re.match(r'^[ACGT]{2}$', genotype):
+        if not re.match(r'^[ACGT]{1,2}$', genotype):
             continue
         vcf_data = {x:'.' for x in VCF_FIELDS}
         vcf_data['CHROM'] = snp_info[2]
@@ -119,7 +143,7 @@ def api23andme_to_vcf_rows(genetic_data):
         yield '\t'.join([vcf_data[x] for x in VCF_FIELDS])
 
 
-def api23andme_to_vcf(genetic_data):
+def api23andme_to_vcf(genetic_data, sex):
     commit = check_output(["git", "rev-parse", "HEAD"]).rstrip('\n')
     source = ("open_humans_data_extraction.twenty_three_and_me," +
               "commit:%s" % commit)
@@ -130,16 +154,57 @@ def api23andme_to_vcf(genetic_data):
                                   format_info=format_info)
     for line in vcf_header_lines:
         yield line + '\n'
-    vcf_rows = api23andme_to_vcf_rows(genetic_data)
+    vcf_rows = api23andme_to_vcf_rows(genetic_data, sex)
     for line in vcf_rows:
         yield line + '\n'
 
 
-def api23andme_to_23andmeraw(genetic_data):
+def date_format_as_23andmeraw():
+    weekdays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+    months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+              'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+    weekday = weekdays[date.today().weekday()]
+    month = months[date.today().month - 1]
+    day = str(date.today().day).rjust(2)
+    hour = str(datetime.now().hour).zfill(2)
+    minute = str(datetime.now().minute).zfill(2)
+    second = str(datetime.now().second).zfill(2)
+    time = "%s:%s:%s" % (hour, minute, second)
+    year = str(date.today().year)
+    return ' '.join([weekday, month, day, time, year])
+
+def api23andme_to_23andmeraw(genetic_data, sex):
     snp_info_data = snp_data_23andme()
+    header = ("# This data file generated by Open Humans at: " +
+              date_format_as_23andmeraw())
+    header += """
+#
+# Below is a text version of your data, received by us using the 23andme API
+# and reformatted to resemble the 23andme raw data file format.
+#
+# Fields are TAB-separated. Each line corresponds to a single SNP. For each SNP,
+# we provide its identifier (an rsid or a 23andme internal id) and its location
+# on the reference human genome (if available), as provided by the 23andeme API
+# key. The genotype call is oriented with respect to the plus strand on the
+# human reference sequence.
+#
+# 23andme's key is using the reference human assembly build 37 (also known as
+# Annotation Release 104). Note that it is possible that data downloaded at
+# different times may be different due to ongoing improvements in 23andme's
+# ability to call genotypes. More information about these changes can be found
+# at: https://www.23andme.com/you/download/revisions/
+# 
+# More information on reference human assembly build 37 (aka Annotation Release 104):
+# http://www.ncbi.nlm.nih.gov/mapview/map_search.cgi?taxid=9606
+#
+# rsid\tchromosome\tposition\tgenotype
+"""
+    yield header
     for snp_info in snp_info_data:
         index = int(snp_info[0]) * 2
-        genotype = genetic_data[index:index+2]
+        genotype = get_genotype(genetic_data, snp_info, sex)
+        if not re.match(r'[ACGT-]', genotype):
+            continue
         data = [snp_info[1], snp_info[2], snp_info[3], genotype]
         yield '\t'.join(data) + '\n'
 
