@@ -39,6 +39,7 @@ MAX_ATTEMPTS = 5
 
 
 def get_ebi_url_response(url):
+    """EBI sometimes unresponsive, use this to try multiple times."""
     attempts = 0
     while attempts < MAX_ATTEMPTS:
         attempts += 1
@@ -99,7 +100,8 @@ def _get_all_barcodes(accessions=EBI_STUDY_ACCESSIONS):
     return acc_from_barcode
 
 
-def create_AmGut_OHDataSet(barcode):
+def create_amgut_ohdataset(barcode):
+    """Create an Open Humans data set from an American Gut sample barcode."""
     with open(BARCODE_TO_SAMPACC_FILE) as filedata:
         barcode_to_sampacc = json.loads(''.join(filedata.readlines()))
     ebi_information = get_ebi_info_set(accession=barcode_to_sampacc[barcode])
@@ -118,7 +120,8 @@ def create_AmGut_OHDataSet(barcode):
         ebi_information_file.write(json.dumps(ebi_information[0],
                                    indent=2, sort_keys=True) + '\n')
         ebi_information_file.seek(0)
-        dataset.add_file(file=ebi_information_file, name='ebi_information.json')
+        dataset.add_file(file=ebi_information_file,
+                         name='ebi_information.json')
 
     print "Adding ebi_metadata.tsv file"
     with tempfile.TemporaryFile() as ebi_metadata_tsv_file:
@@ -142,4 +145,4 @@ def create_AmGut_OHDataSet(barcode):
     dataset.close()
 
 if __name__ == "__main__":
-    create_AmGut_OHDataSet(sys.argv[1])
+    create_amgut_ohdataset(sys.argv[1])

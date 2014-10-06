@@ -11,11 +11,10 @@ from datetime import date, datetime
 import json
 import os
 import re
+from subprocess import check_output
+from tempfile import TemporaryFile
+
 import requests
-import subprocess
-from subprocess import call, check_output
-from tempfile import NamedTemporaryFile, TemporaryFile
-import time
 
 from .participant_data_set import OHDataSource, OHDataSet
 
@@ -100,7 +99,7 @@ def get_genotype(genetic_data, snp_info, sex):
         # PAR X coordinates for hg19 according to UCSC are:
         # chrX:60001-2699520 and chrX:154931044-155260560
         if (60001 <= int(snp_info[3]) <= 2699520 or
-            154931044 <= int(snp_info[3]) <= 155260560):
+           154931044 <= int(snp_info[3]) <= 155260560):
             return raw_genotype
         else:
             try:
@@ -123,7 +122,7 @@ def api23andme_to_vcf_rows(genetic_data, sex):
             continue
         if not re.match(r'^[ACGT]{1,2}$', genotype):
             continue
-        vcf_data = {x:'.' for x in VCF_FIELDS}
+        vcf_data = {x: '.' for x in VCF_FIELDS}
         vcf_data['CHROM'] = snp_info[2]
         vcf_data['POS'] = snp_info[3]
         if snp_info[1].startswith('rs'):
@@ -144,6 +143,7 @@ def api23andme_to_vcf_rows(genetic_data, sex):
 
 
 def api23andme_to_vcf(genetic_data, sex):
+    """Create VCF file from 23andmeAPI full genotyping data"""
     commit = check_output(["git", "rev-parse", "HEAD"]).rstrip('\n')
     source = ("open_humans_data_extraction.twenty_three_and_me," +
               "commit:%s" % commit)
@@ -160,6 +160,7 @@ def api23andme_to_vcf(genetic_data, sex):
 
 
 def api23andme_to_23andmeraw(genetic_data, sex):
+    """Create text file similar to 23andme raw data files, from 23andmeAPI"""
     snp_info_data = snp_data_23andme()
     date_string = datetime.now().strftime("%a %b %d %H:%M:%S %Y")
     if date_string[8] == '0':
@@ -170,11 +171,11 @@ def api23andme_to_23andmeraw(genetic_data, sex):
 # Below is a text version of your data, received by us using the 23andme API
 # and reformatted to resemble the 23andme raw data file format.
 #
-# Fields are TAB-separated. Each line corresponds to a single SNP. For each SNP,
-# we provide its identifier (an rsid or a 23andme internal id) and its location
-# on the reference human genome (if available), as provided by the 23andeme API
-# key. The genotype call is oriented with respect to the plus strand on the
-# human reference sequence.
+# Fields are TAB-separated. Each line corresponds to a single SNP. For each
+# SNP, we provide its identifier (an rsid or a 23andme internal id) and its
+# location on the reference human genome (if available), as provided by the
+# 23andeme API key. The genotype call is oriented with respect to the plus
+# strand on the human reference sequence.
 #
 # 23andme's key is using the reference human assembly build 37 (also known as
 # Annotation Release 104). Note that it is possible that data downloaded at
@@ -182,14 +183,14 @@ def api23andme_to_23andmeraw(genetic_data, sex):
 # ability to call genotypes. More information about these changes can be found
 # at: https://www.23andme.com/you/download/revisions/
 #
-# More information on reference human assembly build 37 (aka Annotation Release 104):
+# More information on reference human assembly build 37 (aka Annotation
+# Release 104):
 # http://www.ncbi.nlm.nih.gov/mapview/map_search.cgi?taxid=9606
 #
 # rsid\tchromosome\tposition\tgenotype
 """
     yield header
     for snp_info in snp_info_data:
-        index = int(snp_info[0]) * 2
         genotype = get_genotype(genetic_data, snp_info, sex)
         if not re.match(r'[ACGT-]', genotype):
             continue
@@ -197,7 +198,8 @@ def api23andme_to_23andmeraw(genetic_data, sex):
         yield '\t'.join(data) + '\n'
 
 
-def create_23andme_OHDataSet(access_token, profile_id, file_id):
+def create_23andme_ohdataset(access_token, profile_id, file_id):
+    """Create Open Humans Dataset from 23andme API full genotyping data"""
     source = OHDataSource(name='23andme API',
                           url='http://api.23andme.com/')
     dataset_filename = '23andme-' + file_id + '-dataset.tar.gz'
@@ -225,8 +227,8 @@ def create_23andme_OHDataSet(access_token, profile_id, file_id):
 
 
 if __name__ == "__main__":
-    from secret_test_config import TOKEN_23ANDME, PROFILE_ID_23ANDME
-    file_id = "abc123"
-    create_23andme_OHDataSet(access_token=TOKEN_23ANDME,
+    from .secret_test_config import TOKEN_23ANDME, PROFILE_ID_23ANDME
+    TEST_FILE_ID = "abc123"
+    create_23andme_ohdataset(access_token=TOKEN_23ANDME,
                              profile_id=PROFILE_ID_23ANDME,
-                             file_id=file_id)
+                             file_id=TEST_FILE_ID)
