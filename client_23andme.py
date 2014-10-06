@@ -9,7 +9,7 @@ API_SERVER_23ANDME = "api.23andme.com"
 BASE_API_URL_23ANDME = "https://%s/" % API_SERVER_23ANDME
 BASE_CLIENT_URL = 'http://localhost:%s/' % PORT
 REDIR_URI_23ANDME = '%sreceive_code/' % BASE_CLIENT_URL
-SCOPE_23ANDME = "basic"
+SCOPE_23ANDME = "basic names genomes"
 
 fetch_23andme = flask.Flask(__name__)
 fetch_23andme.config.from_pyfile('config_default.cfg')
