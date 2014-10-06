@@ -14,7 +14,7 @@ import re
 import requests
 import subprocess
 from subprocess import call, check_output
-from tempfile import NamedTemporaryFile
+from tempfile import NamedTemporaryFile, TemporaryFile
 import time
 
 from .participant_data_set import OHDataSource, OHDataSet
@@ -198,20 +198,35 @@ def api23andme_to_23andmeraw(genetic_data, sex):
 
 
 def create_23andme_OHDataSet(access_token, profile_id, file_id):
+    source = OHDataSource(name='23andme API',
+                          url='http://api.23andme.com/')
+    dataset_filename = '23andme-' + file_id + '-dataset.tar.gz'
+    dataset = OHDataSet(filename=dataset_filename, mode='w', source=source)
+    print "Fetching 23andme full genotyping data."
     data_23andme = api23andme_full_gen_data(access_token, profile_id)
     sex_inferred = api23andme_full_gen_infer_sex(data_23andme)
-    data_vcf = api23andme_to_vcf(data_23andme, sex_inferred)
-    output = open('temp.vcf', 'w')
-    for line in data_vcf:
-        output.write(line)
-    data_23andmeraw = api23andme_to_23andmeraw(data_23andme, sex_inferred)
-    output2 = open('temp.txt', 'w')
-    for line in data_23andmeraw:
-        output2.write(line)
+    print "Generating and adding VCF file."
+    with TemporaryFile() as vcffile:
+        data_vcf = api23andme_to_vcf(data_23andme, sex_inferred)
+        for line in data_vcf:
+            vcffile.write(line)
+        vcffile.seek(0)
+        dataset.add_file(file=vcffile,
+                         name='23andme-full-genotyping-%s.vcf' % file_id)
+    print "Generating and adding 23andme 'raw data' file."
+    with TemporaryFile() as rawfile:
+        data_23andmeraw = api23andme_to_23andmeraw(data_23andme, sex_inferred)
+        for line in data_23andmeraw:
+            rawfile.write(line)
+        rawfile.seek(0)
+        dataset.add_file(file=rawfile,
+                         name='23andme-full-genotyping-%s.txt' % file_id)
+    dataset.close()
+
 
 if __name__ == "__main__":
     from secret_test_config import TOKEN_23ANDME, PROFILE_ID_23ANDME
-    file_id = "Test_23andme_data.tar.gz"
+    file_id = "abc123"
     create_23andme_OHDataSet(access_token=TOKEN_23ANDME,
                              profile_id=PROFILE_ID_23ANDME,
                              file_id=file_id)
