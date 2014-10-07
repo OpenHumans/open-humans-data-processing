@@ -14,6 +14,7 @@ Will assemble a data set for the barcode 000007080 in a local file named:
 
 """
 import json
+import os
 import re
 import sys
 import tempfile
@@ -100,7 +101,7 @@ def _get_all_barcodes(accessions=EBI_STUDY_ACCESSIONS):
     return acc_from_barcode
 
 
-def create_amgut_ohdataset(barcode):
+def create_amgut_ohdataset(barcode, output_dir):
     """Create an Open Humans data set from an American Gut sample barcode."""
     with open(BARCODE_TO_SAMPACC_FILE) as filedata:
         barcode_to_sampacc = json.loads(''.join(filedata.readlines()))
@@ -109,7 +110,9 @@ def create_amgut_ohdataset(barcode):
     source = OHDataSource(name='American Gut',
                           url='http://microbio.me/americangut/')
     dataset_filename = 'AmericanGut-' + barcode + '-dataset.tar.gz'
-    dataset = OHDataSet(filename=dataset_filename, mode='w', source=source)
+    filepath = os.path.join(output_dir, dataset_filename)
+    print "output to " + filepath
+    dataset = OHDataSet(filepath=filepath, mode='w', source=source)
     fastq_url = 'http://' + ebi_information[0]['submitted_ftp']
 
     print "Adding remote file from " + fastq_url
@@ -145,4 +148,6 @@ def create_amgut_ohdataset(barcode):
     dataset.close()
 
 if __name__ == "__main__":
-    create_amgut_ohdataset(sys.argv[1])
+    OUTPUT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                              '..', 'files')
+    create_amgut_ohdataset(barcode=sys.argv[1], output_dir=OUTPUT_DIR)

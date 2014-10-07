@@ -198,12 +198,13 @@ def api23andme_to_23andmeraw(genetic_data, sex):
         yield '\t'.join(data) + '\n'
 
 
-def create_23andme_ohdataset(access_token, profile_id, file_id):
+def create_23andme_ohdataset(access_token, profile_id, file_id, output_dir):
     """Create Open Humans Dataset from 23andme API full genotyping data"""
     source = OHDataSource(name='23andme API',
                           url='http://api.23andme.com/')
     dataset_filename = '23andme-' + file_id + '-dataset.tar.gz'
-    dataset = OHDataSet(filename=dataset_filename, mode='w', source=source)
+    dataset_filepath = os.path.join(output_dir, dataset_filename)
+    dataset = OHDataSet(filepath=dataset_filepath, mode='w', source=source)
     print "Fetching 23andme full genotyping data."
     data_23andme = api23andme_full_gen_data(access_token, profile_id)
     sex_inferred = api23andme_full_gen_infer_sex(data_23andme)
@@ -229,6 +230,9 @@ def create_23andme_ohdataset(access_token, profile_id, file_id):
 if __name__ == "__main__":
     from .secret_test_config import TOKEN_23ANDME, PROFILE_ID_23ANDME
     TEST_FILE_ID = "abc123"
+    OUTPUT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                              '..', 'files')
     create_23andme_ohdataset(access_token=TOKEN_23ANDME,
                              profile_id=PROFILE_ID_23ANDME,
-                             file_id=TEST_FILE_ID)
+                             file_id=TEST_FILE_ID,
+                             output_dir=OUTPUT_DIR)

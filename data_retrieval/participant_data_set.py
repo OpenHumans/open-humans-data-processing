@@ -1,5 +1,5 @@
 """
-Create and manage participant-specific research dataset TarFile.
+Create and manage user-specific research dataset TarFile.
 """
 import bz2
 from datetime import datetime
@@ -45,7 +45,7 @@ class OHDataSource(object):
 
 
 class OHDataSet(object):
-    """Create and manage a participant dataset, managed as a tarfile.
+    """Create and manage a user dataset, managed as a tarfile.
 
     _Notes_
 
@@ -84,11 +84,11 @@ class OHDataSet(object):
 
         _Required arguments_
         mode      'r', 'r+', 'a', or 'w'
-        filename   Must end in .tar, .tar.gz, or .tar.bz2.
+        filepath   Must end in .tar, .tar.gz, or .tar.bz2.
         """
-        self.filename = kwargs['filename']
+        self.filepath = kwargs['filepath']
         (self.basename,
-         self.filetype) = self._parse_tar_filename(kwargs['filename'])
+            self.filetype) = self._parse_tar_filename(self.filepath)
         self.mode = kwargs['mode']
         assert self.mode in ['r', 'r+', 'a', 'w'], "Mode not valid"
         self.tempdir = None
@@ -96,17 +96,17 @@ class OHDataSet(object):
 
         if self.mode == 'r':
             try:
-                self.tarfile = tarfile.open(self.filename)
+                self.tarfile = tarfile.open(self.filepath)
                 self.metadata = self.extract_metadata(self.tarfile)
                 self.source = self.extract_source(self.tarfile)
             except:
-                raise ValueError("Not available for reading: " + self.filename)
+                raise ValueError("Not available for reading: " + self.filepath)
         else:
             self.source = kwargs['source']
             self.tempdir = os.path.join(tempfile.mkdtemp(), self.basename)
             os.mkdir(self.tempdir)
             if self.mode == 'a' or self.mode == 'r+':
-                old = tarfile.open(self.filename, 'r')
+                old = tarfile.open(self.filepath, 'r')
                 self._copy_into_tempdir(old)
                 old.close()
 
@@ -155,18 +155,18 @@ class OHDataSet(object):
             shutil.move(os.path.join(old_filesdir, item), self.tempdir)
         shutil.rmtree(extraction_tempdir)
 
-    def add_file(self, filename=None, file=None, name=None):
+    def add_file(self, filepath=None, file=None, name=None):
         """Add local file
 
         _Input_
-        filename  Path to local file. If not given, must provide file and name.
+        filepath  Path to local file. If not given, must provide file and name.
         file      (file or file-like object)
         name      filename to use in archive
         """
-        assert filename or (file and name), "Filename or file and name missing"
-        if filename:
-            filehandle = open(filename)
-            basename = os.path.basename(filename)
+        assert filepath or (file and name), "Filepath or file and name missing"
+        if filepath:
+            filehandle = open(filepath)
+            basename = os.path.basename(filepath)
         else:
             filehandle = file
             basename = name
@@ -219,7 +219,7 @@ class OHDataSet(object):
     def close(self):
         """Close the dataset and create a compressed read-only tarfile"""
         assert self.mode in ['r+', 'a', 'w']
-        self.tarfile = tarfile.open(self.filename, mode='w:' + self.filetype)
+        self.tarfile = tarfile.open(self.filepath, mode='w:' + self.filetype)
         # Generate and add metadata file first so it's at the beginning.
         self.metadata['source'] = self.source.info
         md_filename = self.basename + METADATA_SUFFIX
@@ -236,5 +236,5 @@ class OHDataSet(object):
         self.tarfile.close()
         print "Removing temporary directory: " + self.tempdir
         shutil.rmtree(self.tempdir)
-        self.tarfile = tarfile.open(self.filename, mode='r')
+        self.tarfile = tarfile.open(self.filepath, mode='r')
         self.mode = 'r'
