@@ -11,7 +11,6 @@ from data_retrieval.american_gut import create_amgut_ohdataset
 from data_retrieval.twenty_three_and_me import create_23andme_ohdataset
 
 PORT = 5000
-STORAGE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'files')
 S3_BUCKET_NAME = 'oh-data-export-testing-20141020'
 
 
@@ -34,18 +33,10 @@ def make_celery(app):
 
 ohdata_app = flask.Flask("client")
 ohdata_app.config.update(
-    CELERY_BROKER_URL='amqp://',
+    CELERY_BROKER_URL=os.environ.get('CLOUDAMQP_URL', 'amqp://'),
+    BROKER_POOL_LIMIT=1,
 )
 celery_worker = make_celery(ohdata_app)
-
-from celery.signals import after_task_publish
-
-
-@after_task_publish.connect
-def task_sent_handler(sender=None, body=None, **kwargs):
-    print('after_task_publish for task id {body[id]}'.format(
-        body=body,
-    ))
 
 
 @celery_worker.task()
@@ -84,6 +75,12 @@ def american_gut():
     start_amgut_ohdataset.delay(barcode=request.args['barcode'],
                                 s3_key_name=request.args['s3_key_name'])
     return "Amgut dataset started"
+
+
+@ohdata_app.route('/', methods=['GET', 'POST'])
+def main_page():
+    """Main page for the app."""
+    return "Open Humans Data Extraction - our Flask app"
 
 
 if __name__ == '__main__':

@@ -248,7 +248,7 @@ class S3OHDataSet(OHDataSet):
         self.mode = kwargs['mode']
         self.s3_key_name = kwargs['s3_key_name']
         self.s3_bucket_name = kwargs['s3_bucket_name']
-        assert 'filepath' not in kwargs, "'filepath' argument not used"
+        assert 'filepath' not in kwargs, "'filepath' argument not allowed"
         filename = os.path.basename(kwargs['s3_key_name'])
         filepath_tmp = tempfile.mkstemp()[1]
         # OHDataSet checks that filepaths end with '.tar[|.gz|.bz2]'.
