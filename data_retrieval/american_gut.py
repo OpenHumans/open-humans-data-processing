@@ -1,7 +1,7 @@
 """
 American Gut EBI metadata extraction.
 
-Copyright (C) 2014 Madeleine Price Ball
+Copyright (C) 2014 PersonalGenomes.org
 
 This software is shared under the "MIT License" license (aka "Expat License"),
 see LICENSE.TXT for full license text.
@@ -14,7 +14,6 @@ Will assemble a data set for the barcode 000007080 in a local file named:
 
 """
 import json
-import os
 import re
 import sys
 import tempfile
@@ -22,7 +21,7 @@ import tempfile
 import requests
 from bs4 import BeautifulSoup
 
-from .participant_data_set import OHDataSource, OHDataSet
+from .participant_data_set import OHDataSource, OHDataSet, S3OHDataSet
 
 BARCODE_TO_SAMPACC_FILE = 'american_gut_barcode_to_sample_accession.json'
 
@@ -101,24 +100,45 @@ def _get_all_barcodes(accessions=EBI_STUDY_ACCESSIONS):
     return acc_from_barcode
 
 
-def create_amgut_ohdataset(barcode, output_dir):
-    """Create an Open Humans data set from an American Gut sample barcode."""
-    with open(BARCODE_TO_SAMPACC_FILE) as filedata:
-        barcode_to_sampacc = json.loads(''.join(filedata.readlines()))
-    ebi_information = get_ebi_info_set(accession=barcode_to_sampacc[barcode])
-    ebi_metadata = fetch_metadata_xml(accession=barcode_to_sampacc[barcode])
+def create_amgut_ohdataset(barcode, filepath=None, s3_bucket_name=None,
+                           s3_key_name=None):
+    """Create an Open Humans data set from an American Gut sample barcode.
+
+    Required arguments:
+        barcode: EBI sample barcode
+        filepath OR (s3_bucket_name and s3_key_name): (see below)
+
+    Optional arguments:
+        filepath: Local filepath to write resulting file. Must end with ".tar",
+                  ".tar.gz", or ".tar.bz2".
+        s3_bucket_name: S3 bucket to write resulting file.
+        s3_key_name: S3 key to write resulting file. Must end with ".tar",
+                  ".tar.gz", or ".tar.bz2"
+
+    Either 'filepath' (and no S3 arguments), or both S3 arguments (and no
+    'filepath') must be specified.
+    """
+
+    filepath_used = filepath and not (s3_bucket_name or s3_key_name)
+    s3_used = (s3_bucket_name and s3_key_name) and not filepath
+    # This is an XOR assertion.
+    assert filepath_used != s3_used, "Specific filepath OR s3 info, not both."
+
     source = OHDataSource(name='American Gut',
                           url='http://microbio.me/americangut/')
-    dataset_filename = 'AmericanGut-' + barcode + '-dataset.tar.gz'
-    filepath = os.path.join(output_dir, dataset_filename)
-    print "output to " + filepath
-    dataset = OHDataSet(filepath=filepath, mode='w', source=source)
-    fastq_url = 'http://' + ebi_information[0]['submitted_ftp']
+    if filepath_used:
+        dataset = OHDataSet(mode='w', source=source, filepath=filepath)
+    elif s3_used:
+        dataset = S3OHDataSet(mode='w', source=source,
+                              s3_bucket_name=s3_bucket_name,
+                              s3_key_name=s3_key_name)
+    # Use barcode to get sample accession.
+    with open(BARCODE_TO_SAMPACC_FILE) as filedata:
+        barcode_to_sampacc = json.loads(''.join(filedata.readlines()))
 
-    print "Adding remote file from " + fastq_url
-    dataset.add_remote_file(url=fastq_url)
-
+    # Pull data from EBI.
     print "Adding ebi_information.json file"
+    ebi_information = get_ebi_info_set(accession=barcode_to_sampacc[barcode])
     with tempfile.TemporaryFile() as ebi_information_file:
         ebi_information_file.write(json.dumps(ebi_information[0],
                                    indent=2, sort_keys=True) + '\n')
@@ -127,6 +147,7 @@ def create_amgut_ohdataset(barcode, output_dir):
                          name='ebi_information.json')
 
     print "Adding ebi_metadata.tsv file"
+    ebi_metadata = fetch_metadata_xml(accession=barcode_to_sampacc[barcode])
     with tempfile.TemporaryFile() as ebi_metadata_tsv_file:
         keys = sorted(ebi_metadata.keys())
         # Unclear if incoming data is clean, so pro-actively removing tabs.
@@ -145,9 +166,11 @@ def create_amgut_ohdataset(barcode, output_dir):
         ebi_metadata_json_file.seek(0)
         dataset.add_file(file=ebi_metadata_json_file, name='ebi_metadata.json')
 
+    fastq_url = 'http://' + ebi_information[0]['submitted_ftp']
+    print "Adding remote file from " + fastq_url
+    dataset.add_remote_file(url=fastq_url)
+
     dataset.close()
 
 if __name__ == "__main__":
-    OUTPUT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                              '..', 'files')
-    create_amgut_ohdataset(barcode=sys.argv[1], output_dir=OUTPUT_DIR)
+    create_amgut_ohdataset(barcode=sys.argv[1], output_dir=sys.argv[2])

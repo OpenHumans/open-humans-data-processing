@@ -1,22 +1,29 @@
 """
 23andme genotyping data extraction.
 
-Copyright (C) 2014 Madeleine Price Ball
+Copyright (C) 2014 PersonalGenomes.org
 
 This software is shared under the "MIT License" license (aka "Expat License"),
 see LICENSE.TXT for full license text.
+
+May be used on the command line. For example, the following command:
+    python -m data_retrieval/twentythree_and_me <23andme_token> \
+        <23andme_profile_id> /home/mad/my_23andme_ohdataset.tar.gz
+
+Will assemble a data set at /home/mad/my_23andme_ohdataset.tar.gz
 
 """
 from datetime import date, datetime
 import json
 import os
 import re
+import sys
 from subprocess import check_output
 from tempfile import TemporaryFile
 
 import requests
 
-from .participant_data_set import OHDataSource, OHDataSet
+from .participant_data_set import OHDataSource, OHDataSet, S3OHDataSet
 
 SNP_DATA_23ANDME_FILE = os.path.join(
     os.path.dirname(__file__),
@@ -198,13 +205,40 @@ def api23andme_to_23andmeraw(genetic_data, sex):
         yield '\t'.join(data) + '\n'
 
 
-def create_23andme_ohdataset(access_token, profile_id, file_id, output_dir):
-    """Create Open Humans Dataset from 23andme API full genotyping data"""
+def create_23andme_ohdataset(access_token, profile_id, filepath=None,
+                             s3_bucket_name=None, s3_key_name=None):
+    """Create Open Humans Dataset from 23andme API full genotyping data
+
+    Required arguments:
+        access_token: 23andme access token
+        profile_id: 23andme profile ID
+        filepath OR (s3_bucket_name and s3_key_name): (see below)
+
+    Optional arguments:
+        filepath: Local filepath to write resulting file. Must end with ".tar",
+                  ".tar.gz", or ".tar.bz2".
+        s3_bucket_name: S3 bucket to write resulting file.
+        s3_key_name: S3 key to write resulting file. Must end with ".tar",
+                  ".tar.gz", or ".tar.bz2"
+
+    Either 'filepath' (and no S3 arguments), or both S3 arguments (and no
+    'filepath') must be specified.
+    """
+
+    filepath_used = filepath and not (s3_bucket_name or s3_key_name)
+    s3_used = (s3_bucket_name and s3_key_name) and not filepath
+    # This is an XOR assertion.
+    assert filepath_used != s3_used, "Specific filepath OR s3 info, not both."
+
     source = OHDataSource(name='23andme API',
                           url='http://api.23andme.com/')
-    dataset_filename = '23andme-' + file_id + '-dataset.tar.gz'
-    dataset_filepath = os.path.join(output_dir, dataset_filename)
-    dataset = OHDataSet(filepath=dataset_filepath, mode='w', source=source)
+    if filepath_used:
+        dataset = OHDataSet(mode='w', source=source, filepath=filepath)
+    elif s3_used:
+        dataset = S3OHDataSet(mode='w', source=source,
+                              s3_bucket_name=s3_bucket_name,
+                              s3_key_name=s3_key_name)
+
     print "Fetching 23andme full genotyping data."
     data_23andme = api23andme_full_gen_data(access_token, profile_id)
     sex_inferred = api23andme_full_gen_infer_sex(data_23andme)
@@ -214,25 +248,19 @@ def create_23andme_ohdataset(access_token, profile_id, file_id, output_dir):
         for line in data_vcf:
             vcffile.write(line)
         vcffile.seek(0)
-        dataset.add_file(file=vcffile,
-                         name='23andme-full-genotyping-%s.vcf' % file_id)
+        dataset.add_file(file=vcffile, name='23andme-full-genotyping.vcf')
     print "Generating and adding 23andme 'raw data' file."
     with TemporaryFile() as rawfile:
         data_23andmeraw = api23andme_to_23andmeraw(data_23andme, sex_inferred)
         for line in data_23andmeraw:
             rawfile.write(line)
         rawfile.seek(0)
-        dataset.add_file(file=rawfile,
-                         name='23andme-full-genotyping-%s.txt' % file_id)
+        dataset.add_file(file=rawfile, name='23andme-full-genotyping.txt')
     dataset.close()
 
 
 if __name__ == "__main__":
-    from .secret_test_config import TOKEN_23ANDME, PROFILE_ID_23ANDME
-    TEST_FILE_ID = "abc123"
-    OUTPUT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                              '..', 'files')
-    create_23andme_ohdataset(access_token=TOKEN_23ANDME,
-                             profile_id=PROFILE_ID_23ANDME,
-                             file_id=TEST_FILE_ID,
-                             output_dir=OUTPUT_DIR)
+    TOKEN, PROFILE_ID, FILE_ID = (sys.argv[1], sys.argv[2], sys.argv[3])
+    create_23andme_ohdataset(access_token=TOKEN,
+                             profile_id=PROFILE_ID,
+                             filepath=FILE_ID)

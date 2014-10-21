@@ -12,6 +12,8 @@ import shutil
 import tarfile
 import tempfile
 
+import boto
+
 SOURCE_INFO_ITEMS = ['name', 'url', 'citation',
                     'contact_email', 'contact_email_name',
                     'contact_phone', 'contact_phone_name']
@@ -217,7 +219,7 @@ class OHDataSet(object):
         tempf.close()
 
     def close(self):
-        """Close the dataset and create a compressed read-only tarfile"""
+        """Save and close the dataset."""
         assert self.mode in ['r+', 'a', 'w']
         self.tarfile = tarfile.open(self.filepath, mode='w:' + self.filetype)
         # Generate and add metadata file first so it's at the beginning.
@@ -236,5 +238,54 @@ class OHDataSet(object):
         self.tarfile.close()
         print "Removing temporary directory: " + self.tempdir
         shutil.rmtree(self.tempdir)
-        self.tarfile = tarfile.open(self.filepath, mode='r')
-        self.mode = 'r'
+
+
+class S3OHDataSet(OHDataSet):
+    """OHDataSet where input and/or output are in S3."""
+
+    def __init__(self, *args, **kwargs):
+        """Open S3-based OHDataSet."""
+        self.mode = kwargs['mode']
+        self.s3_key_name = kwargs['s3_key_name']
+        self.s3_bucket_name = kwargs['s3_bucket_name']
+        assert 'filepath' not in kwargs, "'filepath' argument not used"
+        filename = os.path.basename(kwargs['s3_key_name'])
+        filepath_tmp = tempfile.mkstemp()[1]
+        # OHDataSet checks that filepaths end with '.tar[|.gz|.bz2]'.
+        filepath = filepath_tmp + filename
+        shutil.move(filepath_tmp, filepath)
+        # Check S3 connection. Copy S3 to local temp file if reading.
+        try:
+            s3 = boto.connect_s3()
+            bucket = s3.get_bucket(self.s3_bucket_name)
+        except boto.exception.S3ResponseError:
+            raise ValueError("S3 bucket not found: " + self.s3_bucket_name)
+        if self.mode in ['a', 'r+', 'r']:
+            try:
+                key = bucket.get_key(self.s3_key_name)
+                key.get_contents_to_filename(filename)
+            except AttributeError:
+                raise ValueError("S3 key not found: " + self.s3_key_name)
+            key.close()
+        s3.close()
+
+        kwargs['filepath'] = filepath
+        # Now we can treat this as an OHDataSet.
+        super(S3OHDataSet, self).__init__(*args, **kwargs)
+
+    def close(self, *args, **kwargs):
+        """Close S3-based OHDataSet, clean up local temp files."""
+        super(S3OHDataSet, self).close(*args, **kwargs)
+        # Copy to S3 and clean up the temp local filepath.
+        if self.mode in ['a', 'r+', 'w']:
+            s3 = boto.connect_s3()
+            bucket = s3.get_bucket(self.s3_bucket_name)
+            key = bucket.new_key(self.s3_key_name)
+            print "Setting bucket %s and key %s to contents from %s" % (
+                self.s3_bucket_name, self.s3_key_name, self.filepath
+            )
+            key.set_contents_from_filename(self.filepath)
+            key.close()
+            s3.close()
+            print "Done copying to S3, removing temp file %s" % self.filepath
+            os.remove(self.filepath)
