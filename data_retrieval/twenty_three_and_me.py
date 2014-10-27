@@ -18,7 +18,7 @@ import json
 import os
 import re
 import sys
-from subprocess import check_output
+from subprocess import check_output, CalledProcessError
 from tempfile import TemporaryFile
 
 import requests
@@ -151,9 +151,12 @@ def api23andme_to_vcf_rows(genetic_data, sex):
 
 def api23andme_to_vcf(genetic_data, sex):
     """Create VCF file from 23andmeAPI full genotyping data"""
-    commit = check_output(["git", "rev-parse", "HEAD"]).rstrip('\n')
-    source = ("open_humans_data_extraction.twenty_three_and_me," +
-              "commit:%s" % commit)
+    source = "open_humans_data_extraction.twenty_three_and_me"
+    try:
+        commit = check_output(["git", "rev-parse", "HEAD"]).rstrip('\n')
+        source += ", commit:%s" % commit
+    except CalledProcessError:
+        pass
     reference = REFERENCE_GENOME_URL
     format_info = ['<ID=GT,Number=1,Type=String,Description="Genotype">']
     vcf_header_lines = vcf_header(source=source,
