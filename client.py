@@ -4,8 +4,10 @@
 import os
 
 from celery import Celery
+from celery.signals import task_postrun
 import flask
 from flask import request
+import requests
 
 from data_retrieval.american_gut import create_amgut_ohdataset
 from data_retrieval.twenty_three_and_me import create_23andme_ohdataset
@@ -39,8 +41,17 @@ ohdata_app.config.update(
 celery_worker = make_celery(ohdata_app)
 
 
+@task_postrun.connect()
+def task_postrun_handler(sender=None, state=None, kwargs=None, **other_kwargs):
+    params = {'name': sender.name,
+              'state': state,
+              's3_key_name': kwargs['s3_key_name']}
+    url = "https://open-humans-staging.herokuapp.com/activity/task_update/"
+    requests.post(url, data=params)
+
+
 @celery_worker.task()
-def start_amgut_ohdataset(barcode, s3_key_name):
+def make_amgut_ohdataset(barcode, s3_key_name):
     """Task to initiate retrieval of American Gut data set"""
     create_amgut_ohdataset(barcode=barcode,
                            s3_bucket_name=S3_BUCKET_NAME,
@@ -48,7 +59,7 @@ def start_amgut_ohdataset(barcode, s3_key_name):
 
 
 @celery_worker.task()
-def start_23andme_ohdataset(access_token, profile_id, s3_key_name):
+def make_23andme_ohdataset(access_token, profile_id, s3_key_name):
     """Task to initiate retrieval of 23andme data set"""
     create_23andme_ohdataset(access_token=access_token,
                              profile_id=profile_id,
@@ -62,9 +73,9 @@ def start_23andme_ohdataset(access_token, profile_id, s3_key_name):
 def twenty_three_and_me():
     """Page to receive 23andme task request"""
     # if request.method == 'POST':
-    start_23andme_ohdataset.delay(access_token=request.args['access_token'],
-                                  profile_id=request.args['profile_id'],
-                                  s3_key_name=request.args['s3_key_name'])
+    make_23andme_ohdataset.delay(access_token=request.args['access_token'],
+                                 profile_id=request.args['profile_id'],
+                                 s3_key_name=request.args['s3_key_name'])
     return "23andme dataset started"
 
 
@@ -72,8 +83,8 @@ def twenty_three_and_me():
 def american_gut():
     """Page to receive American Gut task request"""
     # if request.method == 'POST':
-    start_amgut_ohdataset.delay(barcode=request.args['barcode'],
-                                s3_key_name=request.args['s3_key_name'])
+    make_amgut_ohdataset.delay(barcode=request.args['barcode'],
+                               s3_key_name=request.args['s3_key_name'])
     return "Amgut dataset started"
 
 
