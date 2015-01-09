@@ -6,11 +6,10 @@ Copyright (C) 2014 PersonalGenomes.org
 This software is shared under the "MIT License" license (aka "Expat License"),
 see LICENSE.TXT for full license text.
 
-May be used on the command line. For example, the following command:
-   python american_gut.py 000007080
-
-Will assemble a data set for the barcode 000007080 in a local file named:
-   AmericanGut-000007080-dataset.tar.gz
+May be used on the command line from this project's base directory, e.g.
+   python -m data_retrieval.american_gut 000007080 files
+...will assemble a data set for the barcode 000007080 at:
+   files/AmericanGut-000007080-dataset.tar.gz
 
 """
 import json
@@ -173,4 +172,4 @@ def create_amgut_ohdataset(barcode, filepath=None, s3_bucket_name=None,
     dataset.close()
 
 if __name__ == "__main__":
-    create_amgut_ohdataset(barcode=sys.argv[1], output_dir=sys.argv[2])
+    create_amgut_ohdataset(barcode=sys.argv[1], filepath=sys.argv[2])
