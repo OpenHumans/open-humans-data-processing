@@ -13,7 +13,6 @@ from data_retrieval.american_gut import create_amgut_ohdataset
 from data_retrieval.twenty_three_and_me import create_23andme_ohdataset
 
 PORT = 5000
-S3_BUCKET_NAME = 'oh-data-export-testing-20141020'
 
 
 #####################################################################
@@ -51,19 +50,20 @@ def task_postrun_handler(sender=None, state=None, kwargs=None, **other_kwargs):
 
 
 @celery_worker.task()
-def make_amgut_ohdataset(barcode, s3_key_name):
+def make_amgut_ohdataset(barcode, s3_key_name, s3_bucket_name):
     """Task to initiate retrieval of American Gut data set"""
     create_amgut_ohdataset(barcode=barcode,
-                           s3_bucket_name=S3_BUCKET_NAME,
+                           s3_bucket_name=S3_bucket_name,
                            s3_key_name=s3_key_name,)
 
 
 @celery_worker.task()
-def make_23andme_ohdataset(access_token, profile_id, s3_key_name):
+def make_23andme_ohdataset(access_token, profile_id,
+                           s3_key_name, s3_bucket_name):
     """Task to initiate retrieval of 23andme data set"""
     create_23andme_ohdataset(access_token=access_token,
                              profile_id=profile_id,
-                             s3_bucket_name=S3_BUCKET_NAME,
+                             s3_bucket_name=s3_bucket_name,
                              s3_key_name=s3_key_name)
 
 
@@ -75,7 +75,8 @@ def twenty_three_and_me():
     # if request.method == 'POST':
     make_23andme_ohdataset.delay(access_token=request.args['access_token'],
                                  profile_id=request.args['profile_id'],
-                                 s3_key_name=request.args['s3_key_name'])
+                                 s3_key_name=request.args['s3_key_name'],
+                                 s3_bucket_name=request.args['s3_bucket_name'])
     return "23andme dataset started"
 
 
@@ -84,7 +85,8 @@ def american_gut():
     """Page to receive American Gut task request"""
     # if request.method == 'POST':
     make_amgut_ohdataset.delay(barcode=request.args['barcode'],
-                               s3_key_name=request.args['s3_key_name'])
+                               s3_key_name=request.args['s3_key_name'],
+                               s3_bucket_name=request.args['s3_bucket_name'])
     return "Amgut dataset started"
 
 
