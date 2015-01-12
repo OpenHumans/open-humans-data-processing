@@ -35,7 +35,7 @@ def make_celery(app):
 ohdata_app = flask.Flask("client")
 ohdata_app.config.update(
     CELERY_BROKER_URL=os.environ.get('CLOUDAMQP_URL', 'amqp://'),
-    BROKER_POOL_LIMIT=1,
+    BROKER_POOL_LIMIT=0,
 )
 celery_worker = make_celery(ohdata_app)
 
@@ -61,6 +61,7 @@ def make_amgut_ohdataset(barcode, s3_key_name, s3_bucket_name):
 def make_23andme_ohdataset(access_token, profile_id,
                            s3_key_name, s3_bucket_name):
     """Task to initiate retrieval of 23andme data set"""
+    print "Working starting 23andme taskher..."
     create_23andme_ohdataset(access_token=access_token,
                              profile_id=profile_id,
                              s3_bucket_name=s3_bucket_name,
@@ -72,6 +73,7 @@ def make_23andme_ohdataset(access_token, profile_id,
 @ohdata_app.route('/23andme', methods=['GET', 'POST'])
 def twenty_three_and_me():
     """Page to receive 23andme task request"""
+    print "Starting 23andme dataset..."
     # if request.method == 'POST':
     make_23andme_ohdataset.delay(access_token=request.args['access_token'],
                                  profile_id=request.args['profile_id'],
