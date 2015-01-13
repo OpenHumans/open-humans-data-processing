@@ -45,7 +45,7 @@ def task_postrun_handler(sender=None, state=None, kwargs=None, **other_kwargs):
     params = {'name': sender.name,
               'state': state,
               's3_key_name': kwargs['s3_key_name']}
-    url = "https://open-humans-staging.herokuapp.com/activity/task_update/"
+    url = kwargs['update_url']
     requests.post(url, data=params)
 
 
@@ -54,7 +54,9 @@ def make_amgut_ohdataset(barcode, s3_key_name, s3_bucket_name):
     """Task to initiate retrieval of American Gut data set"""
     create_amgut_ohdataset(barcode=barcode,
                            s3_bucket_name=S3_bucket_name,
-                           s3_key_name=s3_key_name,)
+                           s3_key_name=s3_key_name,
+                           update_url=update_url,
+                           )
 
 
 @celery_worker.task()
@@ -65,7 +67,9 @@ def make_23andme_ohdataset(access_token, profile_id,
     create_23andme_ohdataset(access_token=access_token,
                              profile_id=profile_id,
                              s3_bucket_name=s3_bucket_name,
-                             s3_key_name=s3_key_name)
+                             s3_key_name=s3_key_name,
+                             update_url=update_url,
+                             )
 
 
 #####################################################################
@@ -78,7 +82,9 @@ def twenty_three_and_me():
     make_23andme_ohdataset.delay(access_token=request.args['access_token'],
                                  profile_id=request.args['profile_id'],
                                  s3_key_name=request.args['s3_key_name'],
-                                 s3_bucket_name=request.args['s3_bucket_name'])
+                                 s3_bucket_name=request.args['s3_bucket_name'],
+                                 update_url=request.args['update_url'],
+                                 )
     return "23andme dataset started"
 
 
@@ -88,7 +94,9 @@ def american_gut():
     # if request.method == 'POST':
     make_amgut_ohdataset.delay(barcode=request.args['barcode'],
                                s3_key_name=request.args['s3_key_name'],
-                               s3_bucket_name=request.args['s3_bucket_name'])
+                               s3_bucket_name=request.args['s3_bucket_name'],
+                               update_url=request.args['update_url'],
+                               )
     return "Amgut dataset started"
 
 
