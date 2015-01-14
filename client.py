@@ -22,6 +22,9 @@ ohdata_app = Flask(__name__)
 ohdata_app.config.update(
     DEBUG=os.getenv('DEBUG', False),
     CELERY_BROKER_URL=os.environ.get('CLOUDAMQP_URL', 'amqp://'),
+    CELERY_ACCEPT_CONTENT=['json'],
+    CELERY_TASK_SERIALIZER='json',
+    CELERY_RESULT_SERIALIZER='json',
     BROKER_POOL_LIMIT=0)
 
 sslify = SSLify(ohdata_app)
