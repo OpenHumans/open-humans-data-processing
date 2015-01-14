@@ -3,3 +3,6 @@
 
 # Flask config, contains secrets.
 config.cfg
+
+# Local environment, used by Foreman
+.env
