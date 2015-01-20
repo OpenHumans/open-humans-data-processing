@@ -209,7 +209,7 @@ def api23andme_to_23andmeraw(genetic_data, sex):
 
 
 def create_23andme_ohdataset(access_token, profile_id, filepath=None,
-                             s3_bucket_name=None, s3_key_name=None):
+                             s3_bucket_name=None, s3_key_name=None, **kwargs):
     """Create Open Humans Dataset from 23andme API full genotyping data
 
     Required arguments:

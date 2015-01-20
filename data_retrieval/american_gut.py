@@ -100,7 +100,7 @@ def _get_all_barcodes(accessions=EBI_STUDY_ACCESSIONS):
 
 
 def create_amgut_ohdataset(barcode, filepath=None, s3_bucket_name=None,
-                           s3_key_name=None):
+                           s3_key_name=None, **kwargs):
     """Create an Open Humans data set from an American Gut sample barcode.
 
     Required arguments:
