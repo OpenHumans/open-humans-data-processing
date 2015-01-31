@@ -76,7 +76,7 @@ def make_23andme_ohdataset(access_token, profile_id, s3_key_name,
 
 
 # Pages to receive task requests
-@ohdata_app.route('/23andme', methods=['GET', 'POST'])
+@ohdata_app.route('/twenty_three_and_me', methods=['GET', 'POST'])
 def twenty_three_and_me():
     """
     Page to receive 23andme task request
@@ -90,7 +90,7 @@ def twenty_three_and_me():
     return "23andme dataset started"
 
 
-@ohdata_app.route('/amgut', methods=['GET', 'POST'])
+@ohdata_app.route('/american_gut', methods=['GET', 'POST'])
 def american_gut():
     """
     Page to receive American Gut task request
