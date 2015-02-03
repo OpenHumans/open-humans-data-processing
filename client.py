@@ -3,7 +3,7 @@
 
 import os
 
-from celery.signals import task_postrun
+from celery.signals import after_task_publish, task_postrun, task_prerun
 
 from flask import Flask, request
 from flask_sslify import SSLify
@@ -32,17 +32,46 @@ sslify = SSLify(ohdata_app)
 celery_worker = make_worker(ohdata_app)
 
 
+@after_task_publish.connect()
+def task_sent_handler_cb(sender=None, body=None, **other_kwargs):
+    """
+    Send update that task has been sent to queue.
+    """
+    params = {
+        'name': sender,
+        'state': 'QUEUED',
+        's3_key_name': body['kwargs']['s3_key_name']
+    }
+    url = body['kwargs']['update_url']
+    requests.post(url, data=params)
+
+
 @task_postrun.connect()
 def task_postrun_handler_cb(sender=None, state=None, kwargs=None,
                             **other_kwargs):
+    """
+    Send update that task run is complete.
+    """
     params = {
         'name': sender.name,
         'state': state,
         's3_key_name': kwargs['s3_key_name']
     }
-
     url = kwargs['update_url']
+    requests.post(url, data=params)
 
+
+@task_prerun.connect()
+def task_prerun_handler_cb(sender=None, kwargs=None, **other_kwargs):
+    """
+    Send update that task is starting run.
+    """
+    params = {
+        'name': sender.name,
+        'state': 'INITIATED',
+        's3_key_name': kwargs['s3_key_name']
+    }
+    url = kwargs['update_url']
     requests.post(url, data=params)
 
 
