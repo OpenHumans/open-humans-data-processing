@@ -74,30 +74,20 @@ def task_prerun_handler_cb(sender=None, kwargs=None, **other_kwargs):
 
 # Celery tasks
 @celery_worker.task()
-def make_amgut_ohdataset(barcodes, s3_key_dir, s3_bucket_name, task_id,
-                         update_url):
+def make_amgut_ohdataset(**task_params):
     """
     Task to initiate retrieval of American Gut data set
     """
-    create_amgut_ohdatasets(barcodes=barcodes,
-                            s3_bucket_name=s3_bucket_name,
-                            s3_key_dir=s3_key_dir,
-                            task_id=task_id,
-                            update_url=update_url)
+    create_amgut_ohdatasets(**task_params)
 
 
 @celery_worker.task()
-def make_23andme_ohdataset(access_token, profile_id, s3_key_dir,
-                           s3_bucket_name, task_id, update_url):
+def make_23andme_ohdataset(**task_params):
     """
     Task to initiate retrieval of 23andme data set
     """
-    create_23andme_ohdataset(access_token=access_token,
-                             profile_id=profile_id,
-                             s3_bucket_name=s3_bucket_name,
-                             s3_key_dir=s3_key_dir,
-                             task_id=task_id,
-                             update_url=update_url)
+    print task_params
+    create_23andme_ohdataset(**task_params)
 
 
 # Pages to receive task requests
@@ -106,13 +96,8 @@ def twenty_three_and_me():
     """
     Page to receive 23andme task request
     """
-    make_23andme_ohdataset.delay(access_token=request.args['access_token'],
-                                 profile_id=request.args['profile_id'],
-                                 s3_key_dir=request.args['s3_key_dir'],
-                                 s3_bucket_name=request.args['s3_bucket_name'],
-                                 task_id=request.args['task_id'],
-                                 update_url=request.args['update_url'])
-
+    task_params = json.loads(request.args['task_params'])
+    make_23andme_ohdataset.delay(**task_params)
     return "23andme dataset started"
 
 
@@ -121,13 +106,8 @@ def american_gut():
     """
     Page to receive American Gut task request
     """
-    barcodes = json.loads(request.args['barcodes'])
-    make_amgut_ohdataset.delay(barcodes=barcodes,
-                               s3_key_dir=request.args['s3_key_name'],
-                               s3_bucket_name=request.args['s3_bucket_name'],
-                               task_id=request.args['task_id'],
-                               update_url=request.args['update_url'])
-
+    task_params = json.loads(request.args['task_params'])
+    make_amgut_ohdataset.delay(**task_params)
     return "Amgut dataset started"
 
 
