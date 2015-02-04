@@ -12,7 +12,9 @@ May be used on the command line from this project's base directory, e.g.
    files/AmericanGut-000007080-dataset.tar.gz
 
 """
+from datetime import datetime
 import json
+import os
 import re
 import sys
 import tempfile
@@ -99,77 +101,100 @@ def _get_all_barcodes(accessions=EBI_STUDY_ACCESSIONS):
     return acc_from_barcode
 
 
-def create_amgut_ohdataset(barcode, filepath=None, s3_bucket_name=None,
-                           s3_key_name=None, **kwargs):
-    """Create an Open Humans data set from an American Gut sample barcode.
+def create_amgut_ohdatasets(barcodes,
+                            filedir=None,
+                            s3_bucket_name=None,
+                            s3_key_dir=None,
+                            task_id=None,
+                            update_url=None):
+    """Create Open Humans data sets from an American Gut sample barcode.
 
     Required arguments:
-        barcode: EBI sample barcode
+        barcodes: List of EBI sample barcode
         filepath OR (s3_bucket_name and s3_key_name): (see below)
 
     Optional arguments:
-        filepath: Local filepath to write resulting file. Must end with ".tar",
-                  ".tar.gz", or ".tar.bz2".
+        filedir: Local filepath, folder in which to place the resulting file.
         s3_bucket_name: S3 bucket to write resulting file.
-        s3_key_name: S3 key to write resulting file. Must end with ".tar",
-                  ".tar.gz", or ".tar.bz2"
+        s3_key_dir: S3 key "directory" to write resulting file. The full S3 key
+                    name will add a filename to the end of s3_key_dir.
 
-    Either 'filepath' (and no S3 arguments), or both S3 arguments (and no
-    'filepath') must be specified.
+    Either 'filedir' (and no S3 arguments), or both S3 arguments (and no
+    'filedir') must be specified.
     """
-
-    filepath_used = filepath and not (s3_bucket_name or s3_key_name)
-    s3_used = (s3_bucket_name and s3_key_name) and not filepath
+    filedir_used = filedir and not (s3_bucket_name or s3_key_dir)
+    s3_used = (s3_bucket_name and s3_key_dir) and not filedir
     # This is an XOR assertion.
-    assert filepath_used != s3_used, "Specific filepath OR s3 info, not both."
+    assert filedir_used != s3_used, "Specific filedir OR s3 info, not both."
 
     source = OHDataSource(name='American Gut',
                           url='http://microbio.me/americangut/')
-    if filepath_used:
-        dataset = OHDataSet(mode='w', source=source, filepath=filepath)
-    elif s3_used:
-        dataset = S3OHDataSet(mode='w', source=source,
-                              s3_bucket_name=s3_bucket_name,
-                              s3_key_name=s3_key_name)
-    # Use barcode to get sample accession.
+
+    # For mapping barcodes to sample accessions.
     with open(BARCODE_TO_SAMPACC_FILE) as filedata:
         barcode_to_sampacc = json.loads(''.join(filedata.readlines()))
 
-    # Pull data from EBI.
-    print "Adding ebi_information.json file"
-    ebi_information = get_ebi_info_set(accession=barcode_to_sampacc[barcode])
-    with tempfile.TemporaryFile() as ebi_information_file:
-        ebi_information_file.write(json.dumps(ebi_information[0],
-                                   indent=2, sort_keys=True) + '\n')
-        ebi_information_file.seek(0)
-        dataset.add_file(file=ebi_information_file,
-                         name='ebi_information.json')
+    for barcode in barcodes:
+        filename = ('american_gut-%s-sample_%s.tar.gz' %
+                    (datetime.now().strftime('%Y%m%d%H%M%S'), barcode))
+        if filedir_used:
+            filepath = os.path.join(filedir, filename)
+            dataset = OHDataSet(mode='w', source=source, filepath=filepath)
+        elif s3_used:
+            s3_key_name = os.path.join(s3_key_dir, filename)
+            dataset = S3OHDataSet(mode='w', source=source,
+                                  s3_bucket_name=s3_bucket_name,
+                                  s3_key_name=s3_key_name)
 
-    print "Adding ebi_metadata.tsv file"
-    ebi_metadata = fetch_metadata_xml(accession=barcode_to_sampacc[barcode])
-    with tempfile.TemporaryFile() as ebi_metadata_tsv_file:
-        keys = sorted(ebi_metadata.keys())
-        # Unclear if incoming data is clean, so pro-actively removing tabs.
-        header = '#' + '\t'.join([re.sub('\t', '    ', k) for k in keys])
-        ebi_metadata_tsv_file.write(header + '\n')
-        values = '\t'.join([re.sub('\t', '    ', ebi_metadata[k]) for
-                            k in keys])
-        ebi_metadata_tsv_file.write(values + '\n')
-        ebi_metadata_tsv_file.seek(0)
-        dataset.add_file(file=ebi_metadata_tsv_file, name='ebi_metadata.tsv')
+        # Pull data from EBI.
+        print "Adding ebi_information.json file"
+        ebi_information = get_ebi_info_set(
+            accession=barcode_to_sampacc[barcode])
+        with tempfile.TemporaryFile() as ebi_information_file:
+            ebi_information_file.write(json.dumps(ebi_information[0],
+                                       indent=2, sort_keys=True) + '\n')
+            ebi_information_file.seek(0)
+            dataset.add_file(file=ebi_information_file,
+                             name='ebi_information.json')
 
-    print "Adding ebi_metadata.json file"
-    with tempfile.TemporaryFile() as ebi_metadata_json_file:
-        ebi_metadata_json_file.write(json.dumps(ebi_metadata,
-                                     indent=2, sort_keys=True) + '\n')
-        ebi_metadata_json_file.seek(0)
-        dataset.add_file(file=ebi_metadata_json_file, name='ebi_metadata.json')
+        print "Adding ebi_metadata.tsv file"
+        ebi_metadata = fetch_metadata_xml(
+            accession=barcode_to_sampacc[barcode])
+        with tempfile.TemporaryFile() as ebi_metadata_tsv_file:
+            keys = sorted(ebi_metadata.keys())
+            # Unclear if incoming data is clean, so pro-actively removing tabs.
+            header = '#' + '\t'.join([re.sub('\t', '    ', k) for k in keys])
+            ebi_metadata_tsv_file.write(header + '\n')
+            values = '\t'.join([re.sub('\t', '    ', ebi_metadata[k]) for
+                                k in keys])
+            ebi_metadata_tsv_file.write(values + '\n')
+            ebi_metadata_tsv_file.seek(0)
+            dataset.add_file(file=ebi_metadata_tsv_file,
+                             name='ebi_metadata.tsv')
 
-    fastq_url = 'http://' + ebi_information[0]['submitted_ftp']
-    print "Adding remote file from " + fastq_url
-    dataset.add_remote_file(url=fastq_url)
+        print "Adding ebi_metadata.json file"
+        with tempfile.TemporaryFile() as ebi_metadata_json_file:
+            ebi_metadata_json_file.write(json.dumps(ebi_metadata,
+                                         indent=2, sort_keys=True) + '\n')
+            ebi_metadata_json_file.seek(0)
+            dataset.add_file(file=ebi_metadata_json_file,
+                             name='ebi_metadata.json')
 
-    dataset.close()
+        fastq_url = 'http://' + ebi_information[0]['submitted_ftp']
+        print "Adding remote file from " + fastq_url
+        dataset.add_remote_file(url=fastq_url)
+
+        dataset.close()
+        if task_id and update_url and s3_used:
+            print ("Updating main site (%s) with " % update_url +
+                   "completed files for task_id=%s." % task_id)
+            task_data = {
+                'task_id': task_id,
+                's3_keys': [s3_key_name],
+            }
+            requests.post(update_url,
+                          data={'task_data': json.dumps(task_data)})
+
 
 if __name__ == "__main__":
-    create_amgut_ohdataset(barcode=sys.argv[1], filepath=sys.argv[2])
+    create_amgut_ohdatasets(barcode=sys.argv[1], filedir=sys.argv[2])

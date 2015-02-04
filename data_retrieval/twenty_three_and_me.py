@@ -208,36 +208,44 @@ def api23andme_to_23andmeraw(genetic_data, sex):
         yield '\t'.join(data) + '\n'
 
 
-def create_23andme_ohdataset(access_token, profile_id, filepath=None,
-                             s3_bucket_name=None, s3_key_name=None, **kwargs):
+def create_23andme_ohdataset(access_token,
+                             profile_id,
+                             filedir=None,
+                             s3_bucket_name=None,
+                             s3_key_dir=None,
+                             task_id=None,
+                             update_url=None):
     """Create Open Humans Dataset from 23andme API full genotyping data
 
     Required arguments:
         access_token: 23andme access token
         profile_id: 23andme profile ID
-        filepath OR (s3_bucket_name and s3_key_name): (see below)
+        filedir OR (s3_bucket_name and s3_key_dir): (see below)
 
     Optional arguments:
-        filepath: Local filepath to write resulting file. Must end with ".tar",
-                  ".tar.gz", or ".tar.bz2".
+        filedir: Local filepath, folder in which to place the resulting file.
         s3_bucket_name: S3 bucket to write resulting file.
-        s3_key_name: S3 key to write resulting file. Must end with ".tar",
-                  ".tar.gz", or ".tar.bz2"
+        s3_key_dir: S3 key "directory" to write resulting file. The full S3 key
+                    name will add a filename to the end of s3_key_dir.
 
-    Either 'filepath' (and no S3 arguments), or both S3 arguments (and no
-    'filepath') must be specified.
+    Either 'filedir' (and no S3 arguments), or both S3 arguments (and no
+    'filedir') must be specified.
     """
 
-    filepath_used = filepath and not (s3_bucket_name or s3_key_name)
-    s3_used = (s3_bucket_name and s3_key_name) and not filepath
+    filedir_used = filedir and not (s3_bucket_name or s3_key_dir)
+    s3_used = (s3_bucket_name and s3_key_dir) and not filedir
     # This is an XOR assertion.
-    assert filepath_used != s3_used, "Specific filepath OR s3 info, not both."
+    assert filedir_used != s3_used, "Specific filedir OR s3 info, not both."
 
+    filename = ('%s-full-genotype-data.tar.gz' %
+                datetime.now().strftime('%Y%m%d%H%M%S'))
     source = OHDataSource(name='23andme API',
                           url='http://api.23andme.com/')
-    if filepath_used:
+    if filedir_used:
+        filepath = os.path.join(filedir, filename)
         dataset = OHDataSet(mode='w', source=source, filepath=filepath)
     elif s3_used:
+        s3_key_name = os.path.join(s3_key_dir, filename)
         dataset = S3OHDataSet(mode='w', source=source,
                               s3_bucket_name=s3_bucket_name,
                               s3_key_name=s3_key_name)
@@ -260,6 +268,14 @@ def create_23andme_ohdataset(access_token, profile_id, filepath=None,
         rawfile.seek(0)
         dataset.add_file(file=rawfile, name='23andme-full-genotyping.txt')
     dataset.close()
+    if task_id and update_url and s3_used:
+        print ("Updating main site (%s) with completed files for task_id=%s." %
+               (update_url, task_id))
+        task_data = {
+            'task_id': task_id,
+            's3_keys': [s3_key_name],
+        }
+        requests.post(update_url, data={'task_data': json.dumps(task_data)})
 
 
 if __name__ == "__main__":
