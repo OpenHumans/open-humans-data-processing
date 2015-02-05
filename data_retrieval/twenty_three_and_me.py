@@ -283,4 +283,4 @@ if __name__ == "__main__":
     TOKEN, PROFILE_ID, FILE_ID = (sys.argv[1], sys.argv[2], sys.argv[3])
     create_23andme_ohdataset(access_token=TOKEN,
                              profile_id=PROFILE_ID,
-                             filepath=FILE_ID)
+                             filedir=FILE_ID)
