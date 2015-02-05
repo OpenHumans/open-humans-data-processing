@@ -232,9 +232,9 @@ def create_23andme_ohdataset(access_token,
     Either 'filedir' (and no S3 arguments), or both S3 arguments (and no
     'filedir') must be specified.
     """
+    filedir_used = bool(filedir and not (s3_bucket_name or s3_key_dir))
+    s3_used = bool((s3_bucket_name and s3_key_dir) and not filedir)
 
-    filedir_used = filedir and not (s3_bucket_name or s3_key_dir)
-    s3_used = (s3_bucket_name and s3_key_dir) and not filedir
     # This is an XOR assertion.
     assert filedir_used != s3_used, "Specific filedir OR s3 info, not both."
 
