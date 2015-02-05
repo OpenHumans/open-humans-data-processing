@@ -24,7 +24,10 @@ from bs4 import BeautifulSoup
 
 from .participant_data_set import OHDataSource, OHDataSet, S3OHDataSet
 
-BARCODE_TO_SAMPACC_FILE = 'american_gut_barcode_to_sample_accession.json'
+BARCODE_TO_SAMPACC_FILE = os.path.join(
+    os.path.dirname(__file__),
+    'american-gut',
+    'barcode_to_sample_accession.json')
 
 EBI_STUDY_ACCESSIONS = ['ERP003819',
                         'ERP003820',
@@ -33,8 +36,7 @@ EBI_STUDY_ACCESSIONS = ['ERP003819',
                         'ERP005361',
                         'ERP005362',
                         'ERP005366',
-                        'ERP005367',
-                        ]
+                        'ERP005367']
 
 MAX_ATTEMPTS = 5
 

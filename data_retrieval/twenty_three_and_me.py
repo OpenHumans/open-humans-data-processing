@@ -13,11 +13,12 @@ May be used on the command line. For example, the following command:
 Will assemble a data set at /home/mad/my_23andme_ohdataset.tar.gz
 
 """
-from datetime import date, datetime
 import json
 import os
 import re
 import sys
+
+from datetime import date, datetime
 from subprocess import check_output, CalledProcessError
 from tempfile import TemporaryFile
 
@@ -26,14 +27,14 @@ import requests
 from .participant_data_set import OHDataSource, OHDataSet, S3OHDataSet
 
 SNP_DATA_23ANDME_FILE = os.path.join(
-    os.path.dirname(__file__),
-    '23andme_API_snps_data_with_ref_sorted.txt')
+    os.path.dirname(__file__), '23andme', 'API_snps_data_with_ref_sorted.txt')
+
+API23ANDME_Y_REGIONS_JSON = os.path.join(
+    os.path.dirname(__file__), '23andme', 'y_chrom_regions.json')
 
 # Was used to generate reference genotypes in the previous file.
 REFERENCE_GENOME_URL = ("http://hgdownload-test.cse.ucsc.edu/" +
                         "goldenPath/hg19/bigZips/hg19.2bit")
-
-API23ANDME_Y_REGIONS_JSON = 'data_retrieval/23andme_y_chrom_regions.json'
 
 VCF_FIELDS = ['CHROM', 'POS', 'ID', 'REF', 'ALT', 'QUAL', 'FILTER',
               'INFO', 'FORMAT', '23ANDME_DATA']
