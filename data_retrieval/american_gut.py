@@ -137,8 +137,8 @@ def create_amgut_ohdatasets(barcodes,
         barcode_to_sampacc = json.loads(''.join(filedata.readlines()))
 
     for barcode in barcodes:
-        filename = ('american_gut-%s-sample_%s.tar.gz' %
-                    (datetime.now().strftime('%Y%m%d%H%M%S'), barcode))
+        filename = ('american_gut-barcode_%s-%s.tar.gz' %
+                    (barcode, datetime.now().strftime('%Y%m%d%H%M%S')))
         if filedir_used:
             filepath = os.path.join(filedir, filename)
             dataset = OHDataSet(mode='w', source=source, filepath=filepath)
@@ -199,4 +199,4 @@ def create_amgut_ohdatasets(barcodes,
 
 
 if __name__ == "__main__":
-    create_amgut_ohdatasets(barcode=sys.argv[1], filedir=sys.argv[2])
+    create_amgut_ohdatasets(barcodes=[sys.argv[1]], filedir=sys.argv[2])
