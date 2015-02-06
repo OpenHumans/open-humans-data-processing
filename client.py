@@ -11,6 +11,7 @@ from flask_sslify import SSLify
 import requests
 
 from data_retrieval.american_gut import create_amgut_ohdatasets
+from data_retrieval.pgp_harvard import create_pgpharvard_ohdatasets
 from data_retrieval.twenty_three_and_me import create_23andme_ohdataset
 
 from celery_worker import make_worker
@@ -74,14 +75,6 @@ def task_prerun_handler_cb(sender=None, kwargs=None, **other_kwargs):
 
 # Celery tasks
 @celery_worker.task()
-def make_amgut_ohdataset(**task_params):
-    """
-    Task to initiate retrieval of American Gut data set
-    """
-    create_amgut_ohdatasets(**task_params)
-
-
-@celery_worker.task()
 def make_23andme_ohdataset(**task_params):
     """
     Task to initiate retrieval of 23andme data set
@@ -90,11 +83,32 @@ def make_23andme_ohdataset(**task_params):
     create_23andme_ohdataset(**task_params)
 
 
+@celery_worker.task()
+def make_amgut_ohdataset(**task_params):
+    """
+    Task to initiate retrieval of American Gut data set
+    """
+    create_amgut_ohdatasets(**task_params)
+
+
+@celery_worker.task()
+def make_pgpharvard_ohdataset(**task_params):
+    """
+    Task to initiate retrieval of 23andme data set
+    """
+    print task_params
+    create_pgpharvard_ohdatasets(**task_params)
+
+
 # Pages to receive task requests
 @ohdata_app.route('/twenty_three_and_me', methods=['GET', 'POST'])
 def twenty_three_and_me():
     """
     Page to receive 23andme task request
+
+    'task_params' specific to this task:
+        'profile_id' (string identifying the 23andme profile)
+        'access_token' (string, token for accessing the data via 23andme API)
     """
     task_params = json.loads(request.args['task_params'])
     make_23andme_ohdataset.delay(**task_params)
@@ -105,10 +119,26 @@ def twenty_three_and_me():
 def american_gut():
     """
     Page to receive American Gut task request
+
+    'task_params' specific to this task:
+        'barcodes' (array of strings with American Gut sample barcodes)
     """
     task_params = json.loads(request.args['task_params'])
     make_amgut_ohdataset.delay(**task_params)
     return "Amgut dataset started"
+
+
+@ohdata_app.route('/pgp', methods=['GET', 'POST'])
+def pgp_harvard():
+    """
+    Page to receive PGP Harvard task request
+
+    'task_params' specific to this task:
+        'huID' (string with PGP ID, eg 'hu1A2B3C')
+    """
+    task_params = json.loads(request.args['task_params'])
+    make_pgpharvard_ohdataset.delay(**task_params)
+    return "PGP Harvard dataset started"
 
 
 @ohdata_app.route('/', methods=['GET', 'POST'])
