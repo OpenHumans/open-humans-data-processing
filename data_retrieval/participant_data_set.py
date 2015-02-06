@@ -157,7 +157,7 @@ class OHDataSet(object):
             shutil.move(os.path.join(old_filesdir, item), self.tempdir)
         shutil.rmtree(extraction_tempdir)
 
-    def add_file(self, filepath=None, file=None, name=None):
+    def add_file(self, filepath=None, file=None, name=None, file_meta=None):
         """Add local file
 
         _Input_
@@ -176,11 +176,13 @@ class OHDataSet(object):
         file_out = open(filepath_out, 'w')
         maketime = datetime.isoformat(datetime.utcnow().replace(microsecond=0))
         self.metadata['files'][basename] = {'creation_time': maketime}
+        if file_meta:
+            self.metadata['files'][basename].update(file_meta)
         file_out.writelines(filehandle)
         file_out.close()
         filehandle.close()
 
-    def add_remote_file(self, url):
+    def add_remote_file(self, url, file_meta=None):
         """Fetch remote file, add to tempdir. Uncompress if gz or bz2.
 
         _Input_
@@ -211,6 +213,8 @@ class OHDataSet(object):
         rettime = datetime.isoformat(datetime.utcnow().replace(microsecond=0))
         self.metadata['files'][local_filename] = {'retrieved_from': url,
                                                   'retrieval_time': rettime}
+        if file_meta:
+            self.metadata['files'][local_filename].update(file_meta)
         # Copy uncompressed to file, clean up.
         file_out = open(local_filepath, 'wb')
         file_out.writelines(out)

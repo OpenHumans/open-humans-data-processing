@@ -79,8 +79,9 @@ def parse_survey_div(profile_soup):
     """
     surveys = []
     # Find survey data div.
-    survey_heading = soup.find(re.compile(r'^h[123456]$', re.I),
-                               text=re.compile(r'^\s*Surveys\s*$', re.I))
+    survey_heading = profile_soup.find(
+        re.compile(r'^h[123456]$', re.I),
+        text=re.compile(r'^\s*Surveys\s*$', re.I))
     surv_div = survey_heading.find_next_sibling()
     # Check if it's what we wanted (if not, return empty list).
     if not (surv_div.name == 'div' and 'profile-data' in surv_div['class']):
@@ -199,7 +200,8 @@ def create_pgpharvard_ohdatasets(huID,
             created_s3_keys.append(s3_key_name)
         for item in genome_links:
             link = item['link']
-            dataset.add_remote_file(url=link)
+            dataset.add_remote_file(url=link,
+                                    file_meta={'file_type': item['info']})
         dataset.close()
     if task_id and update_url and s3_used and created_s3_keys:
         print ("Updating main site (%s) with " % update_url +
