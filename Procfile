@@ -1,2 +1,2 @@
-web: gunicorn client:ohdata_app --log-file=-
+web: uwsgi uwsgi.ini
 worker: celery -A client.celery_worker worker

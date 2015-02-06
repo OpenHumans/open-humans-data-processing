@@ -8,7 +8,6 @@ celery==3.1.17
 certifi==14.5.14
 Flask==0.10.1
 Flask-SSLify==0.1.4
-gunicorn==19.2.1
 itsdangerous==0.24
 Jinja2==2.7.3
 kombu==3.0.24
@@ -22,4 +21,5 @@ pytz==2014.10
 requests==2.5.1
 requests-oauthlib==0.4.2
 six==1.9.0
+uWSGI==2.0.9
 Werkzeug==0.10.1
