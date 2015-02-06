@@ -7,12 +7,12 @@ import json
 import gzip
 import re
 import os
-import requests
 import shutil
 import tarfile
 import tempfile
 
 import boto
+import requests
 
 SOURCE_INFO_ITEMS = ['name', 'url', 'citation',
                     'contact_email', 'contact_email_name',
