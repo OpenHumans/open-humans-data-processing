@@ -12,17 +12,19 @@ May be used on the command line from this project's base directory, e.g.
    files/AmericanGut-000007080-dataset.tar.gz
 
 """
-from datetime import datetime
 import json
 import os
 import re
 import sys
-import tempfile
+
+from cStringIO import StringIO
+from datetime import datetime
 
 import requests
+
 from bs4 import BeautifulSoup
 
-from .participant_data_set import OHDataSource, OHDataSet, S3OHDataSet
+from .participant_data_set import get_dataset, OHDataSource, S3OHDataSet
 
 BARCODE_TO_SAMPACC_FILE = os.path.join(
     os.path.dirname(__file__),
@@ -57,33 +59,43 @@ def get_ebi_url_response(url):
 
 def get_ebi_info_set(accession, fields_list=None):
     """Get database information from EBI"""
-    url = ("http://www.ebi.ac.uk/ena/data/warehouse/filereport?" +
-           "accession=%(accession)s&" % {'accession': accession} +
-           "&result=read_run")
+    url = ('http://www.ebi.ac.uk/ena/data/warehouse/filereport?'
+           'accession=%(accession)s&result=read_run' %
+           {'accession': accession})
+
     if fields_list:
         fields = ','.join(fields_list)
-        url = url + "&fields=%(fields)s" % {'fields': fields}
+        url = url + '&fields=%(fields)s' % {'fields': fields}
+
     req = get_ebi_url_response(url)
     ebi_data = [line.split('\t') for line in req.text.split('\n')]
     header_data = ebi_data[0]
+
     ebi_info_set = [{header_data[i]: row[i] for i in range(len(row))}
                     for row in ebi_data[1:] if len(row) == len(header_data)]
+
     return ebi_info_set
 
 
 def fetch_metadata_xml(accession):
     """Fetch sample metadata"""
-    xml_url = ("http://www.ebi.ac.uk/ena/data/view/%(acc)s&display=xml" %
+    xml_url = ('http://www.ebi.ac.uk/ena/data/view/%(acc)s&display=xml' %
                {'acc': accession})
+
     md_fetched = get_ebi_url_response(xml_url)
+
     soup = BeautifulSoup(md_fetched.text, 'xml')
-    return {attr('TAG')[0].contents[0]: attr('VALUE')[0].contents[0] if
-            attr('VALUE')[0].contents else None for
-            attr in soup('SAMPLE_ATTRIBUTE')}
+
+    return {
+        attr('TAG')[0].contents[0]: (attr('VALUE')[0].contents[0]
+                                     if attr('VALUE')[0].contents else None)
+        for attr in soup('SAMPLE_ATTRIBUTE')
+    }
 
 
 def _get_all_barcodes(accessions=EBI_STUDY_ACCESSIONS):
-    """Get barcodes for each sample accession in EBI data.
+    """
+    Get barcodes for each sample accession in EBI data.
 
     Barcodes are used to look up American Gut samples and associated
     information for creating a dataset for Open Humans.
@@ -92,23 +104,91 @@ def _get_all_barcodes(accessions=EBI_STUDY_ACCESSIONS):
     """
     acc_from_barcode = {}
     fields_list = ['sample_accession', 'library_name']
+
     for acc in accessions:
         ebi_info_set = get_ebi_info_set(accession=acc, fields_list=fields_list)
+
         for sample_info in ebi_info_set:
             # Notes on barcodes: The standard barcode seems to be 9 digits,
             # but many don't match this pattern. Most are probably blanks and
             # other controls. To be safe, we save information for all of them.
             barcode = sample_info['library_name'].split(':')[0]
+
             acc_from_barcode[barcode] = sample_info['sample_accession']
+
     return acc_from_barcode
 
 
+def create_amgut_ohdataset(barcode,
+                           source,
+                           task_id=None,
+                           update_url=None,
+                           **kwargs):
+    # For mapping barcodes to sample accessions.
+    # TODO: keep this in memory?
+    with open(BARCODE_TO_SAMPACC_FILE) as filedata:
+        barcode_to_sampacc = json.loads(''.join(filedata.readlines()))
+
+    filename = ('american_gut-barcode_%s-%s.tar.gz' %
+                (barcode, datetime.now().strftime('%Y%m%d%H%M%S')))
+
+    dataset = get_dataset(filename, source, **kwargs)
+
+    # Pull data from EBI.
+    print 'Adding ebi_information.json file'
+
+    ebi_information = get_ebi_info_set(
+        accession=barcode_to_sampacc[barcode])[0]
+
+    ebi_information_string = StringIO(json.dumps(ebi_information, indent=2,
+                                                 sort_keys=True) + '\n')
+
+    dataset.add_file(file=ebi_information_string, name='ebi_information.json')
+
+    print 'Adding ebi_metadata.tsv file'
+
+    ebi_metadata = fetch_metadata_xml(accession=barcode_to_sampacc[barcode])
+
+    keys = sorted(ebi_metadata.keys())
+
+    # Unclear if incoming data is clean, so pro-actively removing tabs.
+    header = '#' + '\t'.join([re.sub('\t', '    ', k) for k in keys])
+    values = '\t'.join([re.sub('\t', '    ', ebi_metadata[k]) for k in keys])
+
+    ebi_metadata_string = StringIO(header + '\n' + values + '\n')
+
+    dataset.add_file(file=ebi_metadata_string, name='ebi_metadata.tsv')
+
+    print 'Adding ebi_metadata.json file'
+
+    ebi_metadata_json = StringIO(json.dumps(ebi_metadata, indent=2,
+                                            sort_keys=True) + '\n')
+
+    dataset.add_file(file=ebi_metadata_json, name='ebi_metadata.json')
+
+    fastq_url = 'http://' + ebi_information['submitted_ftp']
+
+    print 'Adding remote file from ' + fastq_url
+
+    dataset.add_remote_file(url=fastq_url)
+    dataset.close()
+
+    if task_id and update_url and isinstance(dataset, S3OHDataSet):
+        print ('Updating main site (%s) with completed files for task_id=%s.' %
+               (update_url, task_id))
+
+        requests.post(update_url, data={
+            'task_data': json.dumps({
+                'task_id': task_id,
+                's3_keys': [dataset.s3_key_name],
+            })
+        })
+
+
 def create_amgut_ohdatasets(barcodes,
-                            filedir=None,
-                            s3_bucket_name=None,
-                            s3_key_dir=None,
                             task_id=None,
-                            update_url=None):
+                            update_url=None,
+                            **kwargs):
     """Create Open Humans data sets from an American Gut sample barcode.
 
     Required arguments:
@@ -124,79 +204,17 @@ def create_amgut_ohdatasets(barcodes,
     Either 'filedir' (and no S3 arguments), or both S3 arguments (and no
     'filedir') must be specified.
     """
-    filedir_used = filedir and not (s3_bucket_name or s3_key_dir)
-    s3_used = (s3_bucket_name and s3_key_dir) and not filedir
-    # This is an XOR assertion.
-    assert filedir_used != s3_used, "Specific filedir OR s3 info, not both."
-
     source = OHDataSource(name='American Gut',
-                          url='http://microbio.me/americangut/')
-
-    # For mapping barcodes to sample accessions.
-    with open(BARCODE_TO_SAMPACC_FILE) as filedata:
-        barcode_to_sampacc = json.loads(''.join(filedata.readlines()))
+                          url='https://microbio.me/americangut/')
 
     for barcode in barcodes:
-        filename = ('american_gut-barcode_%s-%s.tar.gz' %
-                    (barcode, datetime.now().strftime('%Y%m%d%H%M%S')))
-        if filedir_used:
-            filepath = os.path.join(filedir, filename)
-            dataset = OHDataSet(mode='w', source=source, filepath=filepath)
-        elif s3_used:
-            s3_key_name = os.path.join(s3_key_dir, filename)
-            dataset = S3OHDataSet(mode='w', source=source,
-                                  s3_bucket_name=s3_bucket_name,
-                                  s3_key_name=s3_key_name)
-
-        # Pull data from EBI.
-        print "Adding ebi_information.json file"
-        ebi_information = get_ebi_info_set(
-            accession=barcode_to_sampacc[barcode])
-        with tempfile.TemporaryFile() as ebi_information_file:
-            ebi_information_file.write(json.dumps(ebi_information[0],
-                                       indent=2, sort_keys=True) + '\n')
-            ebi_information_file.seek(0)
-            dataset.add_file(file=ebi_information_file,
-                             name='ebi_information.json')
-
-        print "Adding ebi_metadata.tsv file"
-        ebi_metadata = fetch_metadata_xml(
-            accession=barcode_to_sampacc[barcode])
-        with tempfile.TemporaryFile() as ebi_metadata_tsv_file:
-            keys = sorted(ebi_metadata.keys())
-            # Unclear if incoming data is clean, so pro-actively removing tabs.
-            header = '#' + '\t'.join([re.sub('\t', '    ', k) for k in keys])
-            ebi_metadata_tsv_file.write(header + '\n')
-            values = '\t'.join([re.sub('\t', '    ', ebi_metadata[k]) for
-                                k in keys])
-            ebi_metadata_tsv_file.write(values + '\n')
-            ebi_metadata_tsv_file.seek(0)
-            dataset.add_file(file=ebi_metadata_tsv_file,
-                             name='ebi_metadata.tsv')
-
-        print "Adding ebi_metadata.json file"
-        with tempfile.TemporaryFile() as ebi_metadata_json_file:
-            ebi_metadata_json_file.write(json.dumps(ebi_metadata,
-                                         indent=2, sort_keys=True) + '\n')
-            ebi_metadata_json_file.seek(0)
-            dataset.add_file(file=ebi_metadata_json_file,
-                             name='ebi_metadata.json')
-
-        fastq_url = 'http://' + ebi_information[0]['submitted_ftp']
-        print "Adding remote file from " + fastq_url
-        dataset.add_remote_file(url=fastq_url)
-
-        dataset.close()
-        if task_id and update_url and s3_used:
-            print ("Updating main site (%s) with " % update_url +
-                   "completed files for task_id=%s." % task_id)
-            task_data = {
-                'task_id': task_id,
-                's3_keys': [s3_key_name],
-            }
-            requests.post(update_url,
-                          data={'task_data': json.dumps(task_data)})
+        create_amgut_ohdataset(barcode, source, task_id, update_url, **kwargs)
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
+    if len(sys.argv) != 3:
+        print 'Please specify a barcode and directory.'
+
+        sys.exit(1)
+
     create_amgut_ohdatasets(barcodes=[sys.argv[1]], filedir=sys.argv[2])
