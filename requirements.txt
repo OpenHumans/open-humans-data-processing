@@ -7,6 +7,7 @@ boto==2.36.0
 celery==3.1.17
 certifi==14.5.14
 flake8==2.3.0
+flake8-quotes==0.0.1
 Flask-SSLify==0.1.4
 Flask==0.10.1
 gevent==1.0.1
