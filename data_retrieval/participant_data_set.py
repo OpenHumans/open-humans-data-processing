@@ -15,10 +15,38 @@ import boto
 import requests
 
 SOURCE_INFO_ITEMS = ['name', 'url', 'citation',
-                    'contact_email', 'contact_email_name',
-                    'contact_phone', 'contact_phone_name']
+                     'contact_email', 'contact_email_name',
+                     'contact_phone', 'contact_phone_name']
 
 METADATA_SUFFIX = '.metadata.json'
+
+
+def get_dataset(filename,
+                source=None,
+                filedir=None,
+                s3_bucket_name=None,
+                s3_key_dir=None,
+                **kwargs):
+    """
+    Get an S3- or a file-based dataset depending on the arguments passed in.
+    """
+    filedir_used = bool(filedir and not (s3_bucket_name or s3_key_dir))
+    s3_used = bool((s3_bucket_name and s3_key_dir) and not filedir)
+
+    # This is an XOR assertion
+    assert filedir_used != s3_used, 'Specify filedir or S3 info, not both.'
+
+    if filedir_used:
+        filepath = os.path.join(filedir, filename)
+
+        return OHDataSet(mode='w', source=source, filepath=filepath)
+
+    s3_key_name = os.path.join(s3_key_dir, filename)
+
+    return S3OHDataSet(mode='w',
+                       source=source,
+                       s3_bucket_name=s3_bucket_name,
+                       s3_key_name=s3_key_name)
 
 
 class OHDataSource(object):
