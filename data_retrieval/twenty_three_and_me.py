@@ -54,9 +54,7 @@ def snp_data_23andme():
 
     assert next_line == '\t'.join(expected_header) + '\n'
 
-    for line in snp_data_file:
-        data = line.rstrip('\n').split('\t')
-        yield data
+    return (line.rstrip('\n').split('\t') for line in snp_data_file)
 
 
 def api23andme_full_gen_data(access_token, profile_id):
@@ -77,8 +75,8 @@ def api23andme_full_gen_infer_sex(genetic_data):
 
     if re.search(r'[ACGT]', y_seqs):
         return 'Male'
-    else:
-        return 'Female'
+
+    return 'Female'
 
 
 def vcf_header(source=None, reference=None, format_info=None):
@@ -107,7 +105,7 @@ def vcf_header(source=None, reference=None, format_info=None):
 
 def get_genotype(genetic_data, snp_info, sex):
     """Get genotype, collapsing hemizygous locations."""
-    raw_genotype = genetic_data[int(snp_info[0])*2:int(snp_info[0])*2+2]
+    raw_genotype = genetic_data[int(snp_info[0]) * 2:int(snp_info[0]) * 2 + 2]
 
     if snp_info[2] in ['MT', 'M', 'Y', 'chrM', 'chrMT', 'chrY']:
         try:
@@ -116,7 +114,9 @@ def get_genotype(genetic_data, snp_info, sex):
             print raw_genotype
             print snp_info
             print sex
+
             raise SystemError
+
         return raw_genotype[0]
 
     if sex == 'Male' and snp_info[2] in ['X', 'chrX']:
@@ -125,44 +125,59 @@ def get_genotype(genetic_data, snp_info, sex):
         if (60001 <= int(snp_info[3]) <= 2699520 or
                 154931044 <= int(snp_info[3]) <= 155260560):
             return raw_genotype
-        else:
-            try:
-                assert raw_genotype[0] == raw_genotype[1]
-            except AssertionError:
-                print raw_genotype
-                print snp_info
-                print sex
-                raise SystemError
-            return raw_genotype[0]
+
+        try:
+            assert raw_genotype[0] == raw_genotype[1]
+        except AssertionError:
+            print raw_genotype
+            print snp_info
+            print sex
+
+            raise SystemError
+
+        return raw_genotype[0]
+
     return raw_genotype
 
 
 def api23andme_to_vcf_rows(genetic_data, sex):
     """Convert 23andme locations to unsorted VCF lines."""
     snp_info_data = snp_data_23andme()
+
     for snp_info in snp_info_data:
         genotype = get_genotype(genetic_data, snp_info, sex)
+
         if snp_info[4] == '_' or genotype == '__' or genotype == '--':
             continue
+
         if not re.match(r'^[ACGT]{1,2}$', genotype):
             continue
+
         vcf_data = {x: '.' for x in VCF_FIELDS}
         vcf_data['CHROM'] = snp_info[2]
         vcf_data['POS'] = snp_info[3]
+
         if snp_info[1].startswith('rs'):
             vcf_data['ID'] = snp_info[1]
+
         vcf_data['REF'] = snp_info[4]
         alt_alleles = []
+
         for alle in genotype:
             if not alle == vcf_data['REF'] and alle not in alt_alleles:
                 alt_alleles.append(alle)
+
         if alt_alleles:
             vcf_data['ALT'] = ','.join(alt_alleles)
+
         vcf_data['FORMAT'] = 'GT'
         all_alleles = [vcf_data['REF']] + alt_alleles
-        genotype_indexed = '/'.join([str(all_alleles.index(x)) for
-                                     x in genotype])
+
+        genotype_indexed = '/'.join([str(all_alleles.index(x))
+                                     for x in genotype])
+
         vcf_data['23ANDME_DATA'] = genotype_indexed
+
         yield '\t'.join([vcf_data[x] for x in VCF_FIELDS])
 
 
@@ -177,13 +192,18 @@ def api23andme_to_vcf(genetic_data, sex):
         pass
 
     reference = REFERENCE_GENOME_URL
+
     format_info = ['<ID=GT,Number=1,Type=String,Description="Genotype">']
+
     vcf_header_lines = vcf_header(source=source,
                                   reference=reference,
                                   format_info=format_info)
+
     for line in vcf_header_lines:
         yield line + '\n'
+
     vcf_rows = api23andme_to_vcf_rows(genetic_data, sex)
+
     for line in vcf_rows:
         yield line + '\n'
 
@@ -222,11 +242,15 @@ def api23andme_to_23andmeraw(genetic_data, sex):
 # rsid\tchromosome\tposition\tgenotype
 """
     yield header
+
     for snp_info in snp_info_data:
         genotype = get_genotype(genetic_data, snp_info, sex)
+
         if not re.match(r'[ACGT-]', genotype):
             continue
+
         data = [snp_info[1], snp_info[2], snp_info[3], genotype]
+
         yield '\t'.join(data) + '\n'
 
 
@@ -264,14 +288,14 @@ def create_23andme_ohdataset(access_token,
 
     print 'Generating and adding VCF file.'
 
-    data_vcf = StringIO(api23andme_to_vcf(data_23andme, sex_inferred))
+    data_vcf = StringIO(''.join(api23andme_to_vcf(data_23andme, sex_inferred)))
 
     dataset.add_file(file=data_vcf, name='23andme-full-genotyping.vcf')
 
-    print 'Generating and adding 23andme "raw data" file.'
+    print 'Generating and adding 23andMe "raw data" file.'
 
-    data_23andmeraw = StringIO(api23andme_to_23andmeraw(data_23andme,
-                                                        sex_inferred))
+    data_23andmeraw = StringIO(''.join(
+        api23andme_to_23andmeraw(data_23andme, sex_inferred)))
 
     dataset.add_file(file=data_23andmeraw, name='23andme-full-genotyping.txt')
     dataset.close()
@@ -286,6 +310,8 @@ def create_23andme_ohdataset(access_token,
                 's3_keys': [dataset.s3_key_name],
             })
         })
+
+    return dataset
 
 
 if __name__ == '__main__':

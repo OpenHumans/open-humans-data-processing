@@ -7,11 +7,14 @@ This software is shared under the "MIT License" license (aka "Expat License"),
 see LICENSE.TXT for full license text.
 
 May be used on the command line from this project's base directory, e.g.
-   python -m data_retrieval.american_gut 000007080 files
-...will assemble a data set for the barcode 000007080 at:
-   files/AmericanGut-000007080-dataset.tar.gz
 
+   python -m data_retrieval.american_gut 000007080 files
+
+...will assemble a data set for the barcode 000007080 at:
+
+   files/AmericanGut-000007080-dataset.tar.gz
 """
+
 import json
 import os
 import re
@@ -124,6 +127,9 @@ def create_amgut_ohdataset(barcode,
                            task_id=None,
                            update_url=None,
                            **kwargs):
+    """
+    Create a dataset from an American Gut barcode.
+    """
     # For mapping barcodes to sample accessions.
     # TODO: keep this in memory?
     with open(BARCODE_TO_SAMPACC_FILE) as filedata:
@@ -184,12 +190,15 @@ def create_amgut_ohdataset(barcode,
             })
         })
 
+    return dataset
+
 
 def create_amgut_ohdatasets(barcodes,
                             task_id=None,
                             update_url=None,
                             **kwargs):
-    """Create Open Humans data sets from an American Gut sample barcode.
+    """
+    Create Open Humans data sets from an American Gut sample barcode.
 
     Required arguments:
         barcodes: List of EBI sample barcode
@@ -207,8 +216,10 @@ def create_amgut_ohdatasets(barcodes,
     source = OHDataSource(name='American Gut',
                           url='https://microbio.me/americangut/')
 
-    for barcode in barcodes:
+    return [
         create_amgut_ohdataset(barcode, source, task_id, update_url, **kwargs)
+        for barcode in barcodes
+    ]
 
 
 if __name__ == '__main__':

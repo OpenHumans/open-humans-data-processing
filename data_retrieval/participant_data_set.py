@@ -2,7 +2,6 @@
 Create and manage user-specific research dataset TarFile.
 """
 import bz2
-from datetime import datetime
 import json
 import gzip
 import re
@@ -10,6 +9,8 @@ import os
 import shutil
 import tarfile
 import tempfile
+
+from datetime import datetime
 
 import boto
 import requests
@@ -75,11 +76,13 @@ class OHDataSource(object):
 
 
 class OHDataSet(object):
-    """Create and manage a user dataset, managed as a tarfile.
+    """
+    Create and manage a user dataset, managed as a tarfile.
 
     _Notes_
 
     An OHDataSet is just a tarfile, with some constraints:
+
       - All data is contained within a single directory in the tar, with the
         same name as the basename for the file. (i.e. typical tar etiquette)
       - The first file in the tarfile is a JSON-format file containing metadata
@@ -108,9 +111,8 @@ class OHDataSet(object):
     tempdir    Location of temporary directory used for write/edit in 'r+',
                'a', and 'w' modes.
     """
-
     def __init__(self, *args, **kwargs):
-        """Open or create an OHDataset.
+        """Open or create an OHDataSet.
 
         _Required arguments_
         mode      'r', 'r+', 'a', or 'w'
@@ -118,9 +120,9 @@ class OHDataSet(object):
         """
         self.filepath = kwargs['filepath']
         (self.basename,
-            self.filetype) = self._parse_tar_filename(self.filepath)
+         self.filetype) = self._parse_tar_filename(self.filepath)
         self.mode = kwargs['mode']
-        assert self.mode in ['r', 'r+', 'a', 'w'], "Mode not valid"
+        assert self.mode in ['r', 'r+', 'a', 'w'], 'Mode not valid'
         self.tempdir = None
         self.metadata = {'files': {}}
 
@@ -130,7 +132,7 @@ class OHDataSet(object):
                 self.metadata = self.extract_metadata(self.tarfile)
                 self.source = self.extract_source(self.tarfile)
             except:
-                raise ValueError("Not available for reading: " + self.filepath)
+                raise ValueError('Not available for reading: ' + self.filepath)
         else:
             self.source = kwargs['source']
             self.tempdir = os.path.join(tempfile.mkdtemp(), self.basename)
@@ -148,7 +150,7 @@ class OHDataSet(object):
         basename = filename_split[0]
         filetype = filename_split[1].lstrip('.')
         if filetype not in ['', 'bz2', 'gz']:
-            raise ValueError("Not an expected filename: should end with " +
+            raise ValueError('Not an expected filename: should end with ' +
                              "'.tar', 'tar.gz', or 'tar.bz2'.")
         return basename, filetype
 
@@ -156,7 +158,7 @@ class OHDataSet(object):
     def extract_metadata(cls, target_tarfile):
         """Get metadata content from an OHDataSet tarfile."""
         if not target_tarfile or not target_tarfile.name:
-            raise ValueError("Expects TarFile with associated filename.")
+            raise ValueError('Expects TarFile with associated filename.')
         basename, _ = cls._parse_tar_filename(target_tarfile.name)
         metadata_fp = os.path.join(basename, basename + METADATA_SUFFIX)
         metadata_content = target_tarfile.extractfile(metadata_fp).readlines()
@@ -193,7 +195,7 @@ class OHDataSet(object):
         file      (file or file-like object)
         name      filename to use in archive
         """
-        assert filepath or (file and name), "Filepath or file and name missing"
+        assert filepath or (file and name), 'Filepath or file and name missing'
         if filepath:
             filehandle = open(filepath)
             basename = os.path.basename(filepath)
@@ -268,7 +270,7 @@ class OHDataSet(object):
             self.tarfile.add(os.path.join(self.tempdir, item),
                              arcname=os.path.join(self.basename, item))
         self.tarfile.close()
-        print "Removing temporary directory: " + self.tempdir
+        print 'Removing temporary directory: ' + self.tempdir
         shutil.rmtree(self.tempdir)
 
 
@@ -280,25 +282,32 @@ class S3OHDataSet(OHDataSet):
         self.mode = kwargs['mode']
         self.s3_key_name = kwargs['s3_key_name']
         self.s3_bucket_name = kwargs['s3_bucket_name']
-        assert 'filepath' not in kwargs, "'filepath' argument not allowed"
+
+        assert 'filepath' not in kwargs, '"filepath" argument not allowed'
+
         filename = os.path.basename(kwargs['s3_key_name'])
         filepath_tmp = tempfile.mkstemp()[1]
+
         # OHDataSet checks that filepaths end with '.tar[|.gz|.bz2]'.
         filepath = filepath_tmp + filename
         shutil.move(filepath_tmp, filepath)
+
         # Check S3 connection. Copy S3 to local temp file if reading.
         try:
             s3 = boto.connect_s3()
             bucket = s3.get_bucket(self.s3_bucket_name)
         except boto.exception.S3ResponseError:
-            raise ValueError("S3 bucket not found: " + self.s3_bucket_name)
+            raise ValueError('S3 bucket not found: ' + self.s3_bucket_name)
+
         if self.mode in ['a', 'r+', 'r']:
             try:
                 key = bucket.get_key(self.s3_key_name)
                 key.get_contents_to_filename(filename)
             except AttributeError:
-                raise ValueError("S3 key not found: " + self.s3_key_name)
+                raise ValueError('S3 key not found: ' + self.s3_key_name)
+
             key.close()
+
         s3.close()
 
         kwargs['filepath'] = filepath
@@ -308,16 +317,24 @@ class S3OHDataSet(OHDataSet):
     def close(self, *args, **kwargs):
         """Close S3-based OHDataSet, clean up local temp files."""
         super(S3OHDataSet, self).close(*args, **kwargs)
+
+        if self.mode not in ['a', 'r+', 'w']:
+            return
+
         # Copy to S3 and clean up the temp local filepath.
-        if self.mode in ['a', 'r+', 'w']:
-            s3 = boto.connect_s3()
-            bucket = s3.get_bucket(self.s3_bucket_name)
-            key = bucket.new_key(self.s3_key_name)
-            print "Setting bucket %s and key %s to contents from %s" % (
-                self.s3_bucket_name, self.s3_key_name, self.filepath
-            )
-            key.set_contents_from_filename(self.filepath)
-            key.close()
-            s3.close()
-            print "Done copying to S3, removing temp file %s" % self.filepath
-            os.remove(self.filepath)
+        s3 = boto.connect_s3()
+        bucket = s3.get_bucket(self.s3_bucket_name)
+        key = bucket.new_key(self.s3_key_name)
+
+        print 'Setting bucket %s and key %s to contents from %s' % (
+            self.s3_bucket_name, self.s3_key_name, self.filepath
+        )
+
+        key.set_contents_from_filename(self.filepath)
+        key.close()
+
+        s3.close()
+
+        print 'Done copying to S3, removing temp file %s' % self.filepath
+
+        os.remove(self.filepath)

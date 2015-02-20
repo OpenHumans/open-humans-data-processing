@@ -191,6 +191,7 @@ def create_pgpharvard_ohdatasets(huID,
     genome_links, survey_data = parse_pgp_profile_page(huID)
 
     created_s3_keys = []
+    datasets = []
 
     if survey_data:
         dataset = get_dataset(filename_surveys, source, **kwargs)
@@ -208,6 +209,8 @@ def create_pgpharvard_ohdatasets(huID,
 
         dataset.close()
 
+        datasets.append(dataset)
+
     if genome_links:
         dataset = get_dataset(filename_genome, source, **kwargs)
 
@@ -222,6 +225,8 @@ def create_pgpharvard_ohdatasets(huID,
 
         dataset.close()
 
+        datasets.append(dataset)
+
     if task_id and update_url and isinstance(dataset, S3OHDataSet):
         print ('Updating main site (%s) with completed files for task_id=%s.' %
                (update_url, task_id))
@@ -232,6 +237,8 @@ def create_pgpharvard_ohdatasets(huID,
                 's3_keys': created_s3_keys,
             })
         })
+
+    return datasets
 
 
 if __name__ == '__main__':
