@@ -302,6 +302,8 @@ def create_23andme_ohdataset(access_token,
 
     dataset.update(update_url, task_id)
 
+    return dataset
+
 
 if __name__ == '__main__':
     if len(sys.argv) != 4:
