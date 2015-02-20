@@ -221,18 +221,23 @@ class OHDataSet(object):
         url      (str) URL of target file.
         """
         assert self.mode in ['r+', 'a', 'w']
+
         # Parse url for filename information.
         local_filename = url.split('/')[-1]
         basename = re.search(r'(?P<basename>.*?)(|\.gz|\.bz2)$',
                              local_filename).group('basename')
         local_filepath = os.path.join(self.tempdir, basename)
+
         # Get the file.
         req = requests.get(url, stream=True)
         tempf = tempfile.NamedTemporaryFile()
+
         for chunk in req.iter_content(chunk_size=512 * 1024):
             if chunk:
                 tempf.write(chunk)
+
         tempf.flush()
+
         # Set up decompression if appropriate.
         if local_filename.endswith('.gz'):
             out = gzip.open(tempf.name, mode='r')
