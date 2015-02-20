@@ -68,11 +68,11 @@ class OHDataSource(object):
 
     """
     def __init__(self, *args, **kwargs):
-        assert 'name' in kwargs, "OHDataSource requires a 'name'."
-        self.info = {}
-        for item in SOURCE_INFO_ITEMS:
-            if item in kwargs:
-                self.info[item] = kwargs[item]
+        assert 'name' in kwargs, 'OHDataSource requires a "name".'
+
+        self.info = {
+            item: kwargs[item] for item in SOURCE_INFO_ITEMS if item in kwargs
+        }
 
 
 class OHDataSet(object):
@@ -136,7 +136,9 @@ class OHDataSet(object):
         else:
             self.source = kwargs['source']
             self.tempdir = os.path.join(tempfile.mkdtemp(), self.basename)
+
             os.mkdir(self.tempdir)
+
             if self.mode == 'a' or self.mode == 'r+':
                 old = tarfile.open(self.filepath, 'r')
                 self._copy_into_tempdir(old)
@@ -239,6 +241,7 @@ class OHDataSet(object):
         else:
             tempf.seek(0)
             out = tempf
+
         # Update metadata.
         rettime = datetime.isoformat(datetime.utcnow().replace(microsecond=0))
         self.metadata['files'][local_filename] = {'retrieved_from': url,
@@ -314,6 +317,7 @@ class S3OHDataSet(OHDataSet):
         s3.close()
 
         kwargs['filepath'] = filepath
+
         # Now we can treat this as an OHDataSet.
         super(S3OHDataSet, self).__init__(*args, **kwargs)
 

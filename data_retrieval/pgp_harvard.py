@@ -126,8 +126,8 @@ def parse_survey_div(profile_soup):
 
         result_rows = [r for r in data_rows if result_id in r['class']]
 
-        responses = [{'query': el[0].text, 'response': el[1].text} for el in
-                     [r.find_all('td') for r in result_rows]]
+        responses = [{'query': el[0].text, 'response': el[1].text}
+                     for el in [r.find_all('td') for r in result_rows]]
 
         survey = {
             'title': title,
@@ -188,11 +188,15 @@ def create_pgpharvard_ohdatasets(huID,
     filename_surveys = ('PGPHarvard-%s-surveys-%s.tar.gz' %
                         (huID, datetime.now().strftime('%Y%m%d%H%M%S')))
 
+    print 'Parsing profile...'
+
     genome_links, survey_data = parse_pgp_profile_page(huID)
 
     datasets = []
 
     if survey_data:
+        print 'Gathering survey data...'
+
         dataset = get_dataset(filename_surveys, source, **kwargs)
 
         survey_data = StringIO(json.dumps(survey_data, indent=2,
@@ -206,10 +210,14 @@ def create_pgpharvard_ohdatasets(huID,
         datasets.append(dataset)
 
     if genome_links:
+        print 'Gathering genome data...'
+
         dataset = get_dataset(filename_genome, source, **kwargs)
 
         for item in genome_links:
             link = item['link']
+
+            print 'Retrieving', link
 
             dataset.add_remote_file(url=link,
                                     file_meta={'file_type': item['info']})
