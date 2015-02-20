@@ -273,6 +273,9 @@ class OHDataSet(object):
         print 'Removing temporary directory: ' + self.tempdir
         shutil.rmtree(self.tempdir)
 
+    def update(self, *args, **kwargs):
+        pass
+
 
 class S3OHDataSet(OHDataSet):
     """OHDataSet where input and/or output are in S3."""
@@ -338,3 +341,18 @@ class S3OHDataSet(OHDataSet):
         print 'Done copying to S3, removing temp file %s' % self.filepath
 
         os.remove(self.filepath)
+
+    def update(self, update_url, task_id):
+        if not task_id or not update_url:
+            return
+
+        print ('Updating main site (%s) with completed files for task_id=%s.' %
+               (update_url, task_id))
+
+        requests.post(update_url, data={
+            'task_data': json.dumps({
+                'task_id': task_id,
+                's3_keys': [self.s3_key_name],
+            })
+        })
+

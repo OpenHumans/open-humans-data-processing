@@ -27,7 +27,7 @@ import requests
 
 from bs4 import BeautifulSoup
 
-from .participant_data_set import get_dataset, OHDataSource, S3OHDataSet
+from .participant_data_set import get_dataset, OHDataSource
 
 BARCODE_TO_SAMPACC_FILE = os.path.join(
     os.path.dirname(__file__),
@@ -179,16 +179,7 @@ def create_amgut_ohdataset(barcode,
     dataset.add_remote_file(url=fastq_url)
     dataset.close()
 
-    if task_id and update_url and isinstance(dataset, S3OHDataSet):
-        print ('Updating main site (%s) with completed files for task_id=%s.' %
-               (update_url, task_id))
-
-        requests.post(update_url, data={
-            'task_data': json.dumps({
-                'task_id': task_id,
-                's3_keys': [dataset.s3_key_name],
-            })
-        })
+    dataset.update(update_url, task_id)
 
     return dataset
 

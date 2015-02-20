@@ -25,7 +25,7 @@ from subprocess import check_output, CalledProcessError
 
 import requests
 
-from .participant_data_set import get_dataset, OHDataSource, S3OHDataSet
+from .participant_data_set import get_dataset, OHDataSource
 
 SNP_DATA_23ANDME_FILE = os.path.join(
     os.path.dirname(__file__), '23andme', 'API_snps_data_with_ref_sorted.txt')
@@ -300,18 +300,7 @@ def create_23andme_ohdataset(access_token,
     dataset.add_file(file=data_23andmeraw, name='23andme-full-genotyping.txt')
     dataset.close()
 
-    if task_id and update_url and isinstance(dataset, S3OHDataSet):
-        print ('Updating main site (%s) with completed files for task_id=%s.' %
-               (update_url, task_id))
-
-        requests.post(update_url, data={
-            'task_data': json.dumps({
-                'task_id': task_id,
-                's3_keys': [dataset.s3_key_name],
-            })
-        })
-
-    return dataset
+    dataset.update(update_url, task_id)
 
 
 if __name__ == '__main__':

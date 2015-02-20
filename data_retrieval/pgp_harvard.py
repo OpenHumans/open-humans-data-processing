@@ -29,7 +29,7 @@ import requests
 
 from bs4 import BeautifulSoup
 
-from .participant_data_set import get_dataset, OHDataSource, S3OHDataSet
+from .participant_data_set import get_dataset, OHDataSource
 
 
 def parse_uploaded_div(profile_soup):
@@ -190,14 +190,10 @@ def create_pgpharvard_ohdatasets(huID,
 
     genome_links, survey_data = parse_pgp_profile_page(huID)
 
-    created_s3_keys = []
     datasets = []
 
     if survey_data:
         dataset = get_dataset(filename_surveys, source, **kwargs)
-
-        if isinstance(dataset, S3OHDataSet):
-            created_s3_keys.append(dataset.s3_key_name)
 
         survey_data = StringIO(json.dumps(survey_data, indent=2,
                                           sort_keys=True) + '\n')
@@ -207,15 +203,10 @@ def create_pgpharvard_ohdatasets(huID,
             name=('PGPHarvard-%s-surveys-%s.json' %
                   (huID, datetime.now().strftime('%Y%m%d%H%M%S'))))
 
-        dataset.close()
-
         datasets.append(dataset)
 
     if genome_links:
         dataset = get_dataset(filename_genome, source, **kwargs)
-
-        if isinstance(dataset, S3OHDataSet):
-            created_s3_keys.append(dataset.s3_key_name)
 
         for item in genome_links:
             link = item['link']
@@ -223,20 +214,11 @@ def create_pgpharvard_ohdatasets(huID,
             dataset.add_remote_file(url=link,
                                     file_meta={'file_type': item['info']})
 
-        dataset.close()
-
         datasets.append(dataset)
 
-    if task_id and update_url and isinstance(dataset, S3OHDataSet):
-        print ('Updating main site (%s) with completed files for task_id=%s.' %
-               (update_url, task_id))
-
-        requests.post(update_url, data={
-            'task_data': json.dumps({
-                'task_id': task_id,
-                's3_keys': created_s3_keys,
-            })
-        })
+    for dataset in datasets:
+        dataset.close()
+        dataset.update(update_url, task_id)
 
     return datasets
 

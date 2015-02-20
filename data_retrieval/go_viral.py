@@ -14,7 +14,7 @@ from datetime import datetime
 
 import requests
 
-from .participant_data_set import get_dataset, OHDataSource, S3OHDataSet
+from .participant_data_set import get_dataset, OHDataSource
 
 GO_VIRAL_DATA_URL = 'http://www.goviralstudy.com/participants/{}/data'
 
@@ -27,7 +27,7 @@ def get_go_viral_data(access_token, go_viral_id):
         'access_token': access_token
     })
 
-    return request.json
+    return request.json()
 
 
 def create_go_viral_ohdataset(access_token, go_viral_id,
@@ -61,19 +61,13 @@ def create_go_viral_ohdataset(access_token, go_viral_id,
 
     data_go_viral = get_go_viral_data(access_token, go_viral_id)
 
-    dataset.add_file(file=StringIO(data_go_viral), name='go-viral.json')
+    dataset.add_file(file=StringIO(json.dumps(data_go_viral, indent=2)),
+                     name='go-viral.json')
     dataset.close()
 
-    if task_id and update_url and isinstance(dataset, S3OHDataSet):
-        print ('Updating main site (%s) with completed files for task_id=%s.' %
-               (update_url, task_id))
+    dataset.update(update_url, task_id)
 
-        requests.post(update_url, data={
-            'task_data': json.dumps({
-                'task_id': task_id,
-                's3_keys': [dataset.s3_key_name],
-            })
-        })
+    return dataset
 
 
 if __name__ == '__main__':
