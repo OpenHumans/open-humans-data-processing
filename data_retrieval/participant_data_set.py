@@ -227,7 +227,7 @@ class OHDataSet(object):
                              local_filename).group('basename')
         local_filepath = os.path.join(self.tempdir, basename)
         # Get the file.
-        req = requests.get(url)
+        req = requests.get(url, stream=True)
         tempf = tempfile.NamedTemporaryFile()
         for chunk in req.iter_content(chunk_size=512 * 1024):
             if chunk:
