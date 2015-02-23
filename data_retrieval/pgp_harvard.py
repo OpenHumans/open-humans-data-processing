@@ -225,8 +225,13 @@ def create_pgpharvard_ohdatasets(huID,
         datasets.append(dataset)
 
     for dataset in datasets:
+        print 'Closing dataset'
         dataset.close()
+
+        print 'Updating dataset'
         dataset.update(update_url, task_id)
+
+    print 'Finished with all datasets'
 
     return datasets
 

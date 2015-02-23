@@ -1,4 +1,5 @@
-from os import getenv
+import os
+
 from unittest import TestCase
 
 from .utilities import apply_env, get_env
@@ -11,18 +12,20 @@ from .twenty_three_and_me import create_23andme_ohdataset
 apply_env(get_env())
 
 
-class FileTests(TestCase):
-    """
-    Test the filedir case for each data retrieval module.
-    """
+class RetrievalTestCase(TestCase):
     def check_dataset(self, dataset):
         self.assertIsNotNone(dataset.filepath)
         self.assertIsNotNone(dataset.metadata)
         self.assertIsNotNone(dataset.source)
 
+
+class FileTests(RetrievalTestCase):
+    """
+    Test the filedir case for each data retrieval module.
+    """
     def test_twenty_three_and_me(self):
-        token = getenv('TWENTY_THREE_AND_ME_TOKEN')
-        profile = getenv('TWENTY_THREE_AND_ME_PROFILE')
+        token = os.getenv('TWENTY_THREE_AND_ME_TOKEN')
+        profile = os.getenv('TWENTY_THREE_AND_ME_PROFILE')
 
         dataset = create_23andme_ohdataset(token, profile, filedir='test_data')
 
@@ -47,7 +50,7 @@ class FileTests(TestCase):
             self.check_dataset(dataset)
 
     def test_go_viral(self):
-        token = getenv('GO_VIRAL_MANAGEMENT_TOKEN')
+        token = os.getenv('GO_VIRAL_MANAGEMENT_TOKEN')
         go_viral_id = 'simplelogin:5'
 
         dataset = create_go_viral_ohdataset(token, go_viral_id,
@@ -56,10 +59,16 @@ class FileTests(TestCase):
         self.check_dataset(dataset)
 
 
-class S3Tests(TestCase):
+class S3Tests(RetrievalTestCase):
     """
     Test the S3 case for each data retrieval module.
     """
+    @staticmethod
+    def setup_class():
+        os.environ['AWS_ACCESS_KEY_ID'] = os.getenv('TEST_AWS_ACCESS_KEY_ID')
+        os.environ['AWS_SECRET_ACCESS_KEY'] = os.getenv(
+            'TEST_AWS_SECRET_ACCESS_KEY')
+
     def test_twenty_three_and_me(self):
         pass
 
@@ -67,7 +76,15 @@ class S3Tests(TestCase):
         pass
 
     def test_pgp(self):
-        pass
+        hu_id = 'hu43860C'
+
+        datasets = create_pgpharvard_ohdatasets(
+            hu_id,
+            s3_bucket_name=os.getenv('TEST_AWS_S3_BUCKET'),
+            s3_key_dir='test-data')
+
+        for dataset in datasets:
+            self.check_dataset(dataset)
 
     def test_go_viral(self):
         pass

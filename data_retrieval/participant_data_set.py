@@ -12,16 +12,29 @@ import tempfile
 
 from datetime import datetime
 
-import boto
 import requests
 
-boto.set_stream_logger('boto')
+from boto.exception import S3ResponseError
+from boto.s3.connection import S3Connection
 
 SOURCE_INFO_ITEMS = ['name', 'url', 'citation',
                      'contact_email', 'contact_email_name',
                      'contact_phone', 'contact_phone_name']
 
 METADATA_SUFFIX = '.metadata.json'
+
+
+def s3_connection():
+    """
+    Get an S3 connection using environment variables.
+    """
+    key = os.getenv('AWS_ACCESS_KEY_ID')
+    secret = os.getenv('AWS_SECRET_ACCESS_KEY')
+
+    if not (key and secret):
+        raise Exception('You must specify AWS credentials.')
+
+    return S3Connection(key, secret)
 
 
 def get_dataset(filename,
@@ -151,11 +164,16 @@ class OHDataSet(object):
         """Parse filename for basename and filetype."""
         filename = os.path.basename(filename_str)
         filename_split = re.split(r'\.tar', filename)
+
         basename = filename_split[0]
         filetype = filename_split[1].lstrip('.')
+
+        print 'basename: {}, filetype: {}'.format(basename, filetype)
+
         if filetype not in ['', 'bz2', 'gz']:
             raise ValueError('Not an expected filename: should end with ' +
-                             "'.tar', 'tar.gz', or 'tar.bz2'.")
+                             '".tar", "tar.gz", or "tar.bz2".')
+
         return basename, filetype
 
     @classmethod
@@ -303,13 +321,15 @@ class S3OHDataSet(OHDataSet):
 
         # OHDataSet checks that filepaths end with '.tar[|.gz|.bz2]'.
         filepath = filepath_tmp + filename
+
+        print 'moving "{}" to "{}"'.format(filepath_tmp, filepath)
         shutil.move(filepath_tmp, filepath)
 
         # Check S3 connection. Copy S3 to local temp file if reading.
         try:
-            s3 = boto.connect_s3()
+            s3 = s3_connection()
             bucket = s3.get_bucket(self.s3_bucket_name)
-        except boto.exception.S3ResponseError as e:
+        except S3ResponseError as e:
             print 'Exception in opening the S3 bucket:', e
             raise ValueError('S3 bucket not found: ' + self.s3_bucket_name)
 
@@ -325,6 +345,7 @@ class S3OHDataSet(OHDataSet):
 
         s3.close()
 
+        print 'using filepath {}'.format(filepath)
         kwargs['filepath'] = filepath
 
         # Now we can treat this as an OHDataSet.
@@ -338,7 +359,7 @@ class S3OHDataSet(OHDataSet):
             return
 
         # Copy to S3 and clean up the temp local filepath.
-        s3 = boto.connect_s3()
+        s3 = s3_connection()
         bucket = s3.get_bucket(self.s3_bucket_name)
         key = bucket.new_key(self.s3_key_name)
 
@@ -356,7 +377,7 @@ class S3OHDataSet(OHDataSet):
         os.remove(self.filepath)
 
     def update(self, update_url, task_id):
-        if not task_id or not update_url:
+        if not (task_id and update_url):
             return
 
         print ('Updating main site (%s) with completed files for task_id=%s.' %
