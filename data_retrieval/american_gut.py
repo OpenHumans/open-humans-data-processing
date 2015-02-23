@@ -143,8 +143,15 @@ def create_amgut_ohdataset(barcode,
     # Pull data from EBI.
     print 'Adding ebi_information.json file'
 
-    ebi_information = get_ebi_info_set(
-        accession=barcode_to_sampacc[barcode])[0]
+    try:
+        ebi_information = get_ebi_info_set(
+            accession=barcode_to_sampacc[barcode])[0]
+    except KeyError:
+        # If we can't match the barcode to sample accession, the data isn't
+        # yet available in EBI. This situation might arise if the sample hasn't
+        # been analyzed yet (but American Gut is still offering the barcode to
+        # Open Humans). Conclusion by OH should be "Data not available."
+        return
 
     ebi_information_string = StringIO(json.dumps(ebi_information, indent=2,
                                                  sort_keys=True) + '\n')
