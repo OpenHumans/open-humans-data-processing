@@ -307,14 +307,16 @@ class S3OHDataSet(OHDataSet):
         try:
             s3 = boto.connect_s3()
             bucket = s3.get_bucket(self.s3_bucket_name)
-        except boto.exception.S3ResponseError:
+        except boto.exception.S3ResponseError as e:
+            print 'Exception in opening the S3 bucket:', e
             raise ValueError('S3 bucket not found: ' + self.s3_bucket_name)
 
         if self.mode in ['a', 'r+', 'r']:
             try:
                 key = bucket.get_key(self.s3_key_name)
                 key.get_contents_to_filename(filename)
-            except AttributeError:
+            except AttributeError as e:
+                print 'Exception in getting the S3 key:', e
                 raise ValueError('S3 key not found: ' + self.s3_key_name)
 
             key.close()
@@ -364,4 +366,3 @@ class S3OHDataSet(OHDataSet):
                 's3_keys': [self.s3_key_name],
             })
         })
-
