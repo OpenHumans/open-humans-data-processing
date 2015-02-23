@@ -15,6 +15,8 @@ from datetime import datetime
 import boto
 import requests
 
+boto.set_stream_logger('boto')
+
 SOURCE_INFO_ITEMS = ['name', 'url', 'citation',
                      'contact_email', 'contact_email_name',
                      'contact_phone', 'contact_phone_name']
