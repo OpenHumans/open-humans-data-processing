@@ -61,6 +61,10 @@ def create_go_viral_ohdataset(access_token, go_viral_id,
 
     data_go_viral = get_go_viral_data(access_token, go_viral_id)
 
+    # Don't create a file if there's no data from GoViral
+    if not data_go_viral:
+        return
+
     dataset.add_file(file=StringIO(json.dumps(data_go_viral, indent=2)),
                      name='go-viral.json')
     dataset.close()
