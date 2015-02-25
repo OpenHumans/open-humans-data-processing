@@ -317,13 +317,10 @@ class S3OHDataSet(OHDataSet):
         assert 'filepath' not in kwargs, '"filepath" argument not allowed'
 
         filename = os.path.basename(kwargs['s3_key_name'])
-        filepath_tmp = tempfile.mkstemp()[1]
+        self.s3file_tmpdir = tempfile.mkdtemp()
 
         # OHDataSet checks that filepaths end with '.tar[|.gz|.bz2]'.
-        filepath = filepath_tmp + filename
-
-        print 'moving "{}" to "{}"'.format(filepath_tmp, filepath)
-        shutil.move(filepath_tmp, filepath)
+        filepath = os.path.join(self.s3file_tmpdir, filename)
 
         # Check S3 connection. Copy S3 to local temp file if reading.
         try:
@@ -373,8 +370,9 @@ class S3OHDataSet(OHDataSet):
         s3.close()
 
         print 'Done copying to S3, removing temp file %s' % self.filepath
-
         os.remove(self.filepath)
+        print 'Done copying to S3, removing temp dir %s' % self.s3file_tmpdir
+        os.rmdir(self.s3file_tmpdir)
 
     def update(self, update_url, task_id):
         if not (task_id and update_url):
