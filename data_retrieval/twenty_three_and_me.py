@@ -63,9 +63,10 @@ def api23andme_full_gen_data(access_token, profile_id):
 
     genome_data_url = 'http://api.23andme.com/1/genomes/%s' % profile_id
     genome_data_response = requests.get(genome_data_url, headers=headers)
-    genome_data = genome_data_response.json()['genome']
+    genome_data = genome_data_response.json()
 
-    return genome_data
+    if 'genome' in genome_data:
+        return genome_data['genome']
 
 
 def api23andme_full_gen_infer_sex(genetic_data):
@@ -284,6 +285,11 @@ def create_23andme_ohdataset(access_token,
     print 'Fetching 23andme full genotyping data.'
 
     data_23andme = api23andme_full_gen_data(access_token, profile_id)
+
+    # Don't create a data file if there's no genome data
+    if not data_23andme:
+        return
+
     sex_inferred = api23andme_full_gen_infer_sex(data_23andme)
 
     print 'Generating and adding VCF file.'
