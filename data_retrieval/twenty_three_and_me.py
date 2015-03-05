@@ -25,7 +25,7 @@ from subprocess import check_output, CalledProcessError
 
 import requests
 
-from .participant_data_set import get_dataset, now_string, OHDataSource
+from .participant_data_set import format_filename, get_dataset, OHDataSource
 
 SNP_DATA_23ANDME_FILE = os.path.join(
     os.path.dirname(__file__), '23andme', 'API_snps_data_with_ref_sorted.txt')
@@ -276,8 +276,8 @@ def create_23andme_ohdataset(access_token,
     Either 'filedir' (and no S3 arguments), or both S3 arguments (and no
     'filedir') must be specified.
     """
-    filename = '23andme-{}-full-genotype-data-{}.tar.gz'.format(profile_id,
-                                                                now_string())
+    identifier = 'individual-{}'.format(profile_id)
+    filename = format_filename('23andme', identifier, 'full-genotype-data')
 
     source = OHDataSource(name='23andme API', url='http://api.23andme.com/')
 

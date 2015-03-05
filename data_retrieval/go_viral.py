@@ -13,7 +13,7 @@ from cStringIO import StringIO
 
 import requests
 
-from .participant_data_set import get_dataset, now_string, OHDataSource
+from .participant_data_set import format_filename, get_dataset, OHDataSource
 
 GO_VIRAL_DATA_URL = 'http://www.goviralstudy.com/participants/{}/data'
 
@@ -48,9 +48,8 @@ def create_go_viral_ohdataset(access_token, go_viral_id,
     Either 'filedir' (and no S3 arguments), or both S3 arguments (and no
     'filedir') must be specified.
     """
-    filename = 'go-viral-{}-reports-{}.tar.gz'.format(
-        go_viral_id.replace(':', '-'),
-        now_string())
+    identifier = go_viral_id.replace('simplelogin:', 'individual-')
+    filename = format_filename('go-viral', identifier, 'sickness-reports')
 
     source = OHDataSource(name='GoViral Integration API',
                           url='http://www.goviralstudy.com/')
