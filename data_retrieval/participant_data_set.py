@@ -24,6 +24,28 @@ SOURCE_INFO_ITEMS = ['name', 'url', 'citation',
 METADATA_SUFFIX = '.metadata.json'
 
 
+def now_string():
+    """
+    Return the current date and time in a format suitable for a filename.
+
+    This is ISO 8601 without the optional date dashes and time colons.
+    """
+    return datetime.utcnow().strftime('%Y%m%dT%H%M%SZ')
+
+
+def format_filename(provider, identifier, data_type):
+    """
+    Format filenames like:
+
+    23andme_individual-058e958a740ab412_full-genotype-data_20150304174829.tar.gz
+    american-gut_sample-000007080_microbiome-16s_20150304174829.tar.gz
+    go-viral_id-individual_sickness-reports_20150304174829.tar.gz
+    pgp-harvard_individual-hu43860C_genome_20150304174829.tar.gz
+    pgp-harvard_individual-hu43860C_surveys_20150304174829.tar.gz
+    """
+    return '_'.join([provider, identifier, data_type, now_string(), '.tar.gz'])
+
+
 def s3_connection():
     """
     Get an S3 connection using environment variables.

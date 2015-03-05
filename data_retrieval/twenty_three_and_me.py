@@ -25,7 +25,7 @@ from subprocess import check_output, CalledProcessError
 
 import requests
 
-from .participant_data_set import get_dataset, OHDataSource
+from .participant_data_set import format_filename, get_dataset, OHDataSource
 
 SNP_DATA_23ANDME_FILE = os.path.join(
     os.path.dirname(__file__), '23andme', 'API_snps_data_with_ref_sorted.txt')
@@ -84,11 +84,12 @@ def vcf_header(source=None, reference=None, format_info=None):
     """Generate a VCF header."""
     header = []
 
+    today = date.today()
+
     header.append('##fileformat=VCFv4.1')
-    header.append('##fileDate=%s%s%s' %
-                  (str(date.today().year),
-                   str(date.today().month).zfill(2),
-                   str(date.today().day).zfill(2)))
+    header.append('##fileDate=%s%s%s' % (str(today.year),
+                                         str(today.month).zfill(2),
+                                         str(today.day).zfill(2)))
 
     if source:
         header.append('##source=' + source)
@@ -275,8 +276,8 @@ def create_23andme_ohdataset(access_token,
     Either 'filedir' (and no S3 arguments), or both S3 arguments (and no
     'filedir') must be specified.
     """
-    now = datetime.now().strftime('%Y%m%d%H%M%S')
-    filename = '{}-full-genotype-data.tar.gz'.format(now)
+    identifier = 'individual-{}'.format(profile_id)
+    filename = format_filename('23andme', identifier, 'full-genotype-data')
 
     source = OHDataSource(name='23andme API', url='http://api.23andme.com/')
 
