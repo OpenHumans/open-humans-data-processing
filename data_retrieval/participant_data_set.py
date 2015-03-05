@@ -24,6 +24,13 @@ SOURCE_INFO_ITEMS = ['name', 'url', 'citation',
 METADATA_SUFFIX = '.metadata.json'
 
 
+def now_string():
+    """
+    Return the current date and time in a format suitable for a filename.
+    """
+    return datetime.now().strftime('%Y%m%d%H%M%S')
+
+
 def s3_connection():
     """
     Get an S3 connection using environment variables.

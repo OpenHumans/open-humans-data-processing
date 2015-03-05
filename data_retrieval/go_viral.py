@@ -10,11 +10,10 @@ import json
 import sys
 
 from cStringIO import StringIO
-from datetime import datetime
 
 import requests
 
-from .participant_data_set import get_dataset, OHDataSource
+from .participant_data_set import get_dataset, now_string, OHDataSource
 
 GO_VIRAL_DATA_URL = 'http://www.goviralstudy.com/participants/{}/data'
 
@@ -49,8 +48,9 @@ def create_go_viral_ohdataset(access_token, go_viral_id,
     Either 'filedir' (and no S3 arguments), or both S3 arguments (and no
     'filedir') must be specified.
     """
-    now = datetime.now().strftime('%Y%m%d%H%M%S')
-    filename = '{}-go-viral.tar.gz'.format(now)
+    filename = 'go-viral-{}-reports-{}.tar.gz'.format(
+        go_viral_id.replace(':', '-'),
+        now_string())
 
     source = OHDataSource(name='GoViral Integration API',
                           url='http://www.goviralstudy.com/')

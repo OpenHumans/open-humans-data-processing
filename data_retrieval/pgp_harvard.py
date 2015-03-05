@@ -29,7 +29,7 @@ import requests
 
 from bs4 import BeautifulSoup
 
-from .participant_data_set import get_dataset, OHDataSource
+from .participant_data_set import get_dataset, now_string, OHDataSource
 
 
 def parse_uploaded_div(profile_soup):
@@ -183,10 +183,10 @@ def create_pgpharvard_ohdatasets(huID,
     source = OHDataSource(name='Harvard Personal Genome Project',
                           url='http://my.pgp-hms.org/profile/%s' % huID)
 
-    filename_genome = ('PGPHarvard-%s-genome-%s.tar.gz' %
-                       (huID, datetime.now().strftime('%Y%m%d%H%M%S')))
-    filename_surveys = ('PGPHarvard-%s-surveys-%s.tar.gz' %
-                        (huID, datetime.now().strftime('%Y%m%d%H%M%S')))
+    now = now_string()
+
+    filename_genome = 'pgp-harvard-%s-genome-%s.tar.gz' % (huID, now)
+    filename_surveys = 'pgp-harvard-%s-surveys-%s.tar.gz' % (huID, now)
 
     print 'Parsing profile...'
 

@@ -21,13 +21,12 @@ import re
 import sys
 
 from cStringIO import StringIO
-from datetime import datetime
 
 import requests
 
 from bs4 import BeautifulSoup
 
-from .participant_data_set import get_dataset, OHDataSource
+from .participant_data_set import get_dataset, now_string, OHDataSource
 
 BARCODE_TO_SAMPACC_FILE = os.path.join(
     os.path.dirname(__file__),
@@ -135,8 +134,9 @@ def create_amgut_ohdataset(barcode,
     with open(BARCODE_TO_SAMPACC_FILE) as filedata:
         barcode_to_sampacc = json.loads(''.join(filedata.readlines()))
 
-    filename = ('american_gut-barcode_%s-%s.tar.gz' %
-                (barcode, datetime.now().strftime('%Y%m%d%H%M%S')))
+    filename = 'american-gut-%s-full-microbiome-data-%s.tar.gz' % (
+        barcode,
+        now_string())
 
     dataset = get_dataset(filename, source, **kwargs)
 
