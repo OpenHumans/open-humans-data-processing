@@ -43,7 +43,8 @@ def format_filename(provider, identifier, data_type):
     pgp-harvard_individual-hu43860C_genome_20150304174829.tar.gz
     pgp-harvard_individual-hu43860C_surveys_20150304174829.tar.gz
     """
-    return '_'.join([provider, identifier, data_type, now_string(), '.tar.gz'])
+    basename = '_'.join([provider, identifier, data_type, now_string()])
+    return basename + '.tar.gz'
 
 
 def s3_connection():
