@@ -1,5 +1,9 @@
 #!/usr/bin/python
-"""Flask app to run data retrieval tasks for Open Humans"""
+
+"""
+Flask app to run data retrieval tasks for Open Humans
+"""
+
 import json
 import os
 
@@ -13,6 +17,7 @@ import requests
 from data_retrieval.american_gut import create_amgut_ohdatasets
 from data_retrieval.pgp_harvard import create_pgpharvard_ohdatasets
 from data_retrieval.twenty_three_and_me import create_23andme_ohdataset
+from data_retrieval.go_viral import create_go_viral_ohdataset
 
 from celery_worker import make_worker
 
@@ -77,7 +82,7 @@ def task_prerun_handler_cb(sender=None, kwargs=None, **other_kwargs):
 @celery_worker.task()
 def make_23andme_ohdataset(**task_params):
     """
-    Task to initiate retrieval of 23andme data set
+    Task to initiate retrieval of 23andMe data set
     """
     print task_params
     create_23andme_ohdataset(**task_params)
@@ -94,10 +99,19 @@ def make_amgut_ohdataset(**task_params):
 @celery_worker.task()
 def make_pgpharvard_ohdataset(**task_params):
     """
-    Task to initiate retrieval of 23andme data set
+    Task to initiate retrieval of PGP Harvard data set
     """
     print task_params
     create_pgpharvard_ohdatasets(**task_params)
+
+
+@celery_worker.task()
+def make_go_viral_ohdataset(**task_params):
+    """
+    Task to initiate retrieval of GoViral data set
+    """
+    print task_params
+    create_go_viral_ohdataset(**task_params)
 
 
 # Pages to receive task requests
@@ -112,7 +126,7 @@ def twenty_three_and_me():
     """
     task_params = json.loads(request.args['task_params'])
     make_23andme_ohdataset.delay(**task_params)
-    return "23andme dataset started"
+    return '23andMe dataset started'
 
 
 @ohdata_app.route('/american_gut', methods=['GET', 'POST'])
@@ -125,7 +139,7 @@ def american_gut():
     """
     task_params = json.loads(request.args['task_params'])
     make_amgut_ohdataset.delay(**task_params)
-    return "Amgut dataset started"
+    return 'Amgut dataset started'
 
 
 @ohdata_app.route('/pgp', methods=['GET', 'POST'])
@@ -138,7 +152,20 @@ def pgp_harvard():
     """
     task_params = json.loads(request.args['task_params'])
     make_pgpharvard_ohdataset.delay(**task_params)
-    return "PGP Harvard dataset started"
+    return 'PGP Harvard dataset started'
+
+
+@ohdata_app.route('/go_viral', methods=['GET', 'POST'])
+def go_viral():
+    """
+    Page to receive GoViral task request
+
+    'task_params' specific to this task:
+        'go_viral_id' (string with GoViral ID)
+    """
+    task_params = json.loads(request.args['task_params'])
+    make_go_viral_ohdataset.delay(**task_params)
+    return 'GoViral dataset started'
 
 
 @ohdata_app.route('/', methods=['GET', 'POST'])
@@ -146,10 +173,10 @@ def main_page():
     """
     Main page for the app.
     """
-    return "Open Humans Data Processing"
+    return 'Open Humans Data Processing'
 
 
 if __name__ == '__main__':
-    print "A local client for Open Humans data processing is now initialized."
+    print 'A local client for Open Humans data processing is now initialized.'
 
     ohdata_app.run(debug=True, port=PORT)
