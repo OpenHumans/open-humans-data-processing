@@ -82,10 +82,15 @@ def get_dataset(filename,
 
     s3_key_name = os.path.join(s3_key_dir, filename)
 
-    return S3OHDataSet(mode='w',
-                       source=source,
-                       s3_bucket_name=s3_bucket_name,
-                       s3_key_name=s3_key_name)
+    dataset = S3OHDataSet(mode='w',
+                          source=source,
+                          s3_bucket_name=s3_bucket_name,
+                          s3_key_name=s3_key_name)
+    if 'member_id' in kwargs:
+        dataset.metadata.update({
+            'open_humans_member_id': kwargs['member_id'],
+        })
+    return dataset
 
 
 class OHDataSource(object):

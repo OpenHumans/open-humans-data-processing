@@ -138,10 +138,6 @@ def create_amgut_ohdataset(barcode,
     filename = format_filename('american-gut', identifier, 'microbiome-16s')
 
     dataset = get_dataset(filename, source, **kwargs)
-    if 'member_id' in kwargs:
-        dataset.metadata.update({
-            'open_humans_member_id': kwargs['member_id'],
-        })
 
     # Pull data from EBI.
     print 'Adding ebi_information.json file'

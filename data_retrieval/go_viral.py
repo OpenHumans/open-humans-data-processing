@@ -55,10 +55,6 @@ def create_go_viral_ohdataset(access_token, go_viral_id,
                           url='http://www.goviralstudy.com/')
 
     dataset = get_dataset(filename, source, **kwargs)
-    if 'member_id' in kwargs:
-        dataset.metadata.update({
-            'open_humans_member_id': kwargs['member_id'],
-        })
 
     print 'Fetching GoViral data.'
 
