@@ -198,6 +198,10 @@ def create_pgpharvard_ohdatasets(huID,
         print 'Gathering survey data...'
 
         dataset = get_dataset(filename_surveys, source, **kwargs)
+        if 'member_id' in kwargs:
+            dataset.metadata.update({
+                'open_humans_member_id': kwargs['member_id'],
+            })
 
         survey_data = StringIO(json.dumps(survey_data, indent=2,
                                           sort_keys=True) + '\n')

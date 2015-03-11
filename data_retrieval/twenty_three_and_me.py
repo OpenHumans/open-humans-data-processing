@@ -282,6 +282,10 @@ def create_23andme_ohdataset(access_token,
     source = OHDataSource(name='23andme API', url='http://api.23andme.com/')
 
     dataset = get_dataset(filename, source, **kwargs)
+    if 'member_id' in kwargs:
+        dataset.metadata.update({
+            'open_humans_member_id': kwargs['member_id'],
+        })
 
     print 'Fetching 23andme full genotyping data.'
 
