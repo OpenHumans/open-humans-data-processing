@@ -8,7 +8,8 @@ import json
 import logging
 import os
 
-from celery.signals import after_task_publish, task_postrun, task_prerun
+from celery.signals import (after_setup_logger, after_task_publish,
+                            task_postrun, task_prerun)
 
 from flask import Flask, request
 from flask_sslify import SSLify
@@ -22,24 +23,42 @@ from data_retrieval.go_viral import create_go_viral_ohdataset
 
 from celery_worker import make_worker
 
-logging.basicConfig(level=logging.INFO)
-logging.info('Starting data-processing')
-
-PORT = os.getenv('PORT', 5000)
-
 ohdata_app = Flask(__name__)
 
+DEBUG = os.getenv('DEBUG', False)
+PORT = os.getenv('PORT', 5000)
+
+logging.basicConfig(level=logging.DEBUG if DEBUG else logging.INFO)
+logging.info('Starting data-processing')
+
 ohdata_app.config.update(
-    DEBUG=os.getenv('DEBUG', False),
+    DEBUG=DEBUG,
     CELERY_BROKER_URL=os.environ.get('CLOUDAMQP_URL', 'amqp://'),
     CELERY_ACCEPT_CONTENT=['json'],
     CELERY_TASK_SERIALIZER='json',
     CELERY_RESULT_SERIALIZER='json',
+    CELERYD_LOG_COLOR=True,
     BROKER_POOL_LIMIT=0)
 
 sslify = SSLify(ohdata_app)
 
 celery_worker = make_worker(ohdata_app)
+
+
+@after_setup_logger.connect
+def after_setup_logger_cb(logger, **kwargs):
+    """
+    Update the Celery logger's level.
+    """
+    if DEBUG:
+        logger.setLevel(logging.DEBUG)
+
+
+def debug_json(value):
+    """
+    Return a human-readable representation of JSON data.
+    """
+    return json.dumps(value, sort_keys=True, indent=2, separators=(',', ': '))
 
 
 def make_task_data(task_id, task_state):
@@ -54,7 +73,7 @@ def make_task_data(task_id, task_state):
     })
 
 
-@celery_worker.task()
+@celery_worker.task
 def send_queued_update(update_url, task_data):
     """
     The 'after_task_publish' signal runs synchronously so we use celery itself
@@ -65,11 +84,17 @@ def send_queued_update(update_url, task_data):
     requests.post(update_url, data=task_data)
 
 
-@after_task_publish.connect()
+@after_task_publish.connect
 def task_sent_handler_cb(sender=None, body=None, **other_kwargs):
     """
     Send update that task has been sent to queue.
     """
+    if sender == 'client.send_queued_update':
+        return
+
+    logging.debug('after_task_publish sender: %s', sender)
+    logging.debug('after_task_publish body: %s', debug_json(body))
+
     update_url = body['kwargs']['update_url']
     task_data = make_task_data(body['kwargs']['task_id'], 'QUEUED')
 
@@ -78,11 +103,17 @@ def task_sent_handler_cb(sender=None, body=None, **other_kwargs):
     send_queued_update.delay(update_url, task_data)
 
 
-@task_prerun.connect()
+@task_prerun.connect
 def task_prerun_handler_cb(sender=None, kwargs=None, **other_kwargs):
     """
     Send update that task is starting run.
     """
+    if sender == send_queued_update:
+        return
+
+    logging.debug('task_prerun sender: %s', sender)
+    logging.debug('task_prerun kwargs: %s', debug_json(kwargs))
+
     update_url = kwargs['update_url']
     task_data = make_task_data(kwargs['task_id'], 'INITIATED')
 
@@ -91,12 +122,18 @@ def task_prerun_handler_cb(sender=None, kwargs=None, **other_kwargs):
     requests.post(update_url, data=task_data)
 
 
-@task_postrun.connect()
+@task_postrun.connect
 def task_postrun_handler_cb(sender=None, state=None, kwargs=None,
                             **other_kwargs):
     """
     Send update that task run is complete.
     """
+    if sender == send_queued_update:
+        return
+
+    logging.debug('task_postrun sender: %s', sender)
+    logging.debug('task_postrun kwargs: %s', debug_json(kwargs))
+
     update_url = kwargs['update_url']
     task_data = make_task_data(kwargs['task_id'], state)
 
@@ -106,7 +143,7 @@ def task_postrun_handler_cb(sender=None, state=None, kwargs=None,
 
 
 # Celery tasks
-@celery_worker.task()
+@celery_worker.task
 def make_23andme_ohdataset(**task_params):
     """
     Task to initiate retrieval of 23andMe data set
@@ -114,7 +151,7 @@ def make_23andme_ohdataset(**task_params):
     create_23andme_ohdataset(**task_params)
 
 
-@celery_worker.task()
+@celery_worker.task
 def make_amgut_ohdataset(**task_params):
     """
     Task to initiate retrieval of American Gut data set
@@ -122,7 +159,7 @@ def make_amgut_ohdataset(**task_params):
     create_amgut_ohdatasets(**task_params)
 
 
-@celery_worker.task()
+@celery_worker.task
 def make_pgpharvard_ohdataset(**task_params):
     """
     Task to initiate retrieval of PGP Harvard data set
@@ -130,7 +167,7 @@ def make_pgpharvard_ohdataset(**task_params):
     create_pgpharvard_ohdatasets(**task_params)
 
 
-@celery_worker.task()
+@celery_worker.task
 def make_go_viral_ohdataset(**task_params):
     """
     Task to initiate retrieval of GoViral data set
