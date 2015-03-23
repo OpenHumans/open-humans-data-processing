@@ -5,6 +5,7 @@ Flask app to run data retrieval tasks for Open Humans
 """
 
 import json
+import logging
 import os
 
 from celery.signals import after_task_publish, task_postrun, task_prerun
@@ -20,6 +21,9 @@ from data_retrieval.twenty_three_and_me import create_23andme_ohdataset
 from data_retrieval.go_viral import create_go_viral_ohdataset
 
 from celery_worker import make_worker
+
+logging.basicConfig(level=logging.INFO)
+logging.info('Starting data-processing')
 
 PORT = os.getenv('PORT', 5000)
 
@@ -38,17 +42,53 @@ sslify = SSLify(ohdata_app)
 celery_worker = make_worker(ohdata_app)
 
 
+def make_task_data(task_id, task_state):
+    """
+    Format task data for the Open Humans update endpoint.
+    """
+    return json.dumps({
+        'task_data': {
+            'task_id': task_id,
+            'task_state': task_state,
+        }
+    })
+
+
+@celery_worker.task()
+def send_queued_update(update_url, task_data):
+    """
+    The 'after_task_publish' signal runs synchronously so we use celery itself
+    to run it asynchronously.
+    """
+    logging.info('Sending after_task_publish update')
+
+    requests.post(update_url, data=task_data)
+
+
 @after_task_publish.connect()
 def task_sent_handler_cb(sender=None, body=None, **other_kwargs):
     """
     Send update that task has been sent to queue.
     """
-    task_data = {
-        'task_id': body['kwargs']['task_id'],
-        'tast_state': 'QUEUED',
-    }
     update_url = body['kwargs']['update_url']
-    requests.post(update_url, data={'task_data': json.dumps(task_data)})
+    task_data = make_task_data(body['kwargs']['task_id'], 'QUEUED')
+
+    logging.info('Scheduling after_task_publish update')
+
+    send_queued_update.delay(update_url, task_data)
+
+
+@task_prerun.connect()
+def task_prerun_handler_cb(sender=None, kwargs=None, **other_kwargs):
+    """
+    Send update that task is starting run.
+    """
+    update_url = kwargs['update_url']
+    task_data = make_task_data(kwargs['task_id'], 'INITIATED')
+
+    logging.info('Sending task_prerun update')
+
+    requests.post(update_url, data=task_data)
 
 
 @task_postrun.connect()
@@ -57,25 +97,12 @@ def task_postrun_handler_cb(sender=None, state=None, kwargs=None,
     """
     Send update that task run is complete.
     """
-    task_data = {
-        'task_id': kwargs['task_id'],
-        'task_state': state,
-    }
     update_url = kwargs['update_url']
-    requests.post(update_url, data={'task_data': json.dumps(task_data)})
+    task_data = make_task_data(kwargs['task_id'], state)
 
+    logging.info('Sending task_postrun update')
 
-@task_prerun.connect()
-def task_prerun_handler_cb(sender=None, kwargs=None, **other_kwargs):
-    """
-    Send update that task is starting run.
-    """
-    task_data = {
-        'task_id': kwargs['task_id'],
-        'task_state': 'INITIATED',
-    }
-    update_url = kwargs['update_url']
-    requests.post(update_url, data={'task_data': json.dumps(task_data)})
+    requests.post(update_url, data=task_data)
 
 
 # Celery tasks
@@ -84,7 +111,6 @@ def make_23andme_ohdataset(**task_params):
     """
     Task to initiate retrieval of 23andMe data set
     """
-    print task_params
     create_23andme_ohdataset(**task_params)
 
 
@@ -101,7 +127,6 @@ def make_pgpharvard_ohdataset(**task_params):
     """
     Task to initiate retrieval of PGP Harvard data set
     """
-    print task_params
     create_pgpharvard_ohdatasets(**task_params)
 
 
@@ -110,7 +135,6 @@ def make_go_viral_ohdataset(**task_params):
     """
     Task to initiate retrieval of GoViral data set
     """
-    print task_params
     create_go_viral_ohdataset(**task_params)
 
 
@@ -174,9 +198,3 @@ def main_page():
     Main page for the app.
     """
     return 'Open Humans Data Processing'
-
-
-if __name__ == '__main__':
-    print 'A local client for Open Humans data processing is now initialized.'
-
-    ohdata_app.run(debug=True, port=PORT)
