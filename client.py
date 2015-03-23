@@ -65,12 +65,12 @@ def make_task_data(task_id, task_state):
     """
     Format task data for the Open Humans update endpoint.
     """
-    return json.dumps({
-        'task_data': {
+    return {
+        'task_data': json.dumps({
             'task_id': task_id,
             'task_state': task_state,
-        }
-    })
+        })
+    }
 
 
 @celery_worker.task
