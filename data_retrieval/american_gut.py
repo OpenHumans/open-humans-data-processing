@@ -40,7 +40,15 @@ EBI_STUDY_ACCESSIONS = ['ERP003819',
                         'ERP005361',
                         'ERP005362',
                         'ERP005366',
-                        'ERP005367']
+                        'ERP005367',
+                        'ERP005651',
+                        'ERP005821',
+                        'ERP005949',
+                        'ERP006349',
+                        'ERP008512',
+                        'ERP008604',
+                        'ERP008617',
+                        ]
 
 MAX_ATTEMPTS = 5
 
