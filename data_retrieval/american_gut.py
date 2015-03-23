@@ -143,7 +143,7 @@ def create_amgut_ohdataset(barcode,
         barcode_to_sampacc = json.loads(''.join(filedata.readlines()))
 
     identifier = 'sample-{}'.format(barcode)
-    filename = format_filename('american-gut', identifier, 'microbiome-16s')
+    filename = format_filename('american-gut', identifier, 'microbiome-16S')
 
     dataset = get_dataset(filename, source, **kwargs)
 
