@@ -74,12 +74,12 @@ def make_task_data(task_id, task_state):
 
 
 @celery_worker.task
-def send_queued_update(update_url, task_data):
+def task_update(update_url, task_data):
     """
     The 'after_task_publish' signal runs synchronously so we use celery itself
     to run it asynchronously.
     """
-    logging.info('Sending after_task_publish update')
+    logging.info('Sending queued update')
 
     requests.post(update_url, data=task_data)
 
@@ -89,7 +89,7 @@ def task_sent_handler_cb(sender=None, body=None, **other_kwargs):
     """
     Send update that task has been sent to queue.
     """
-    if sender == 'client.send_queued_update':
+    if sender == 'client.task_update':
         return
 
     logging.debug('after_task_publish sender: %s', sender)
@@ -100,7 +100,7 @@ def task_sent_handler_cb(sender=None, body=None, **other_kwargs):
 
     logging.info('Scheduling after_task_publish update')
 
-    send_queued_update.delay(update_url, task_data)
+    task_update.apply_async(args=[update_url, task_data], queue='priority')
 
 
 @task_prerun.connect
@@ -108,7 +108,7 @@ def task_prerun_handler_cb(sender=None, kwargs=None, **other_kwargs):
     """
     Send update that task is starting run.
     """
-    if sender == send_queued_update:
+    if sender == task_update:
         return
 
     logging.debug('task_prerun sender: %s', sender)
@@ -117,9 +117,9 @@ def task_prerun_handler_cb(sender=None, kwargs=None, **other_kwargs):
     update_url = kwargs['update_url']
     task_data = make_task_data(kwargs['task_id'], 'INITIATED')
 
-    logging.info('Sending task_prerun update')
+    logging.info('Scheduling task_prerun update')
 
-    requests.post(update_url, data=task_data)
+    task_update.apply_async(args=[update_url, task_data], queue='priority')
 
 
 @task_postrun.connect
@@ -128,7 +128,7 @@ def task_postrun_handler_cb(sender=None, state=None, kwargs=None,
     """
     Send update that task run is complete.
     """
-    if sender == send_queued_update:
+    if sender == task_update:
         return
 
     logging.debug('task_postrun sender: %s', sender)
@@ -137,9 +137,9 @@ def task_postrun_handler_cb(sender=None, state=None, kwargs=None,
     update_url = kwargs['update_url']
     task_data = make_task_data(kwargs['task_id'], state)
 
-    logging.info('Sending task_postrun update')
+    logging.info('Scheduling task_postrun update')
 
-    requests.post(update_url, data=task_data)
+    task_update.apply_async(args=[update_url, task_data], queue='priority')
 
 
 # Celery tasks
