@@ -392,6 +392,10 @@ class S3OHDataSet(OHDataSet):
             self.s3_bucket_name, self.s3_key_name, self.filepath
         )
 
+        # TODO: Find a better place for this, support other mime types
+        if self.s3_key_name.endswith('.tar.gz'):
+            key.set_metadata('Content-Type', 'application/x-tar-gz')
+
         key.set_contents_from_filename(self.filepath)
         key.close()
 
