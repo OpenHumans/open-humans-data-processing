@@ -33,13 +33,14 @@ import requests
 from .participant_data_set import format_filename, get_dataset, OHDataSource
 
 BACKGROUND_DATA_KEYS = ['timestamp', 'steps', 'calories_burned', 'source']
-FITNESS_SUMMARY_KEYS = ['uri', 'type', 'start_time', 'utc_offset',
+FITNESS_SUMMARY_KEYS = ['uri', 'type', 'equipment', 'start_time', 'utc_offset',
                         'total_distance', 'duration', 'total_calories',
                         'climb', 'source']
 FITNESS_PATH_KEYS = ['latitude', 'longitude', 'altitude', 'timestamp', 'type']
 FITNESS_SOCIAL_KEYS = ['uri', 'share', 'share_map']
 FRIENDS_SOCIAL_KEYS = ['userID', 'status']
-SLEEP_DATA_KEYS = ['timestamp', 'total_sleep', 'source']
+SLEEP_DATA_KEYS = ['timestamp', 'total_sleep', 'deep', 'rem', 'light', 'awake',
+                   'times_woken', 'source']
 
 
 def runkeeper_query(access_token, path, content_type=None):
@@ -139,7 +140,8 @@ def get_runkeeper_data(access_token, user_data):
     # Get sleep data.
     sleep_items = get_items(access_token, user_data['sleep'])
     for item in sleep_items:
-        sleep_log_data = data_for_keys(item, SLEEP_DATA_KEYS)
+        item_data = runkeeper_query(access_token, item['uri'])
+        sleep_log_data = data_for_keys(item_data, SLEEP_DATA_KEYS)
         sleep_data['sleep_logs'].append(sleep_log_data)
 
     return {'activity_data': activity_data,
