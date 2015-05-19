@@ -42,15 +42,29 @@ FRIENDS_SOCIAL_KEYS = ['userID', 'status']
 SLEEP_DATA_KEYS = ['timestamp', 'total_sleep', 'source']
 
 
-def runkeeper_query(access_token, path):
+def runkeeper_query(access_token, path, content_type=None):
     """
     Query RunKeeper API and return data.
     """
     headers = {'Authorization': 'Bearer %s' % access_token}
+    if content_type:
+        headers['Content-Type'] = content_type
     data_url = 'https://api.runkeeper.com%s' % path
     data_response = requests.get(data_url, headers=headers)
     data = data_response.json()
     return data
+
+
+class CSVIO(object):
+    def __init__(self):
+        self.filehandle = StringIO()
+        self.csvwriter = csv.writer(self.filehandle)
+
+    def writerow(self, *args, **kwargs):
+        return self.csvwriter.writerow(*args, **kwargs)
+
+    def seek(self, *args, **kwargs):
+        return self.filehandle.seek(*args, **kwargs)
 
 
 def get_items(access_token, path, recurse='both'):
@@ -74,6 +88,11 @@ def get_items(access_token, path, recurse='both'):
     return items
 
 
+def data_for_keys(data_dict, data_keys):
+    data_out = {x: data_dict[x] if x in data_dict else '' for x in data_keys}
+    return data_out
+
+
 def get_runkeeper_data(access_token, user_data):
     """
     Get activity, social, and sleep data from RunKeeper for a given user.
@@ -91,34 +110,37 @@ def get_runkeeper_data(access_token, user_data):
         access_token, user_data['background_activities'])
     # Fitness activities.
     for item in fitness_activity_items:
-        item_data = runkeeper_query(access_token, item['uri'])
+        item_data = runkeeper_query(
+            access_token,
+            item['uri'],
+            content_type='application/vnd.com.runkeeper.FitnessActivity+json')
         # Record activity data.
-        item_activity_data = {x: item_data[x] for x in FITNESS_SUMMARY_KEYS}
+        item_activity_data = data_for_keys(item_data, FITNESS_SUMMARY_KEYS)
         item_activity_data['path'] = [
-            {x: datapoint[x] for x in FITNESS_PATH_KEYS}
+            data_for_keys(datapoint, FITNESS_PATH_KEYS)
             for datapoint in item_data['path']]
         activity_data['fitness_activities'].append(item_activity_data)
         # Record social data.
-        item_social_data = {x: item_data[x] for x in FITNESS_SOCIAL_KEYS}
+        item_social_data = data_for_keys(item_data, FITNESS_SOCIAL_KEYS)
         social_data['fitness_activity_sharing'].append(item_social_data)
     # Background activities.
     for item in background_activity_items:
         item_data = runkeeper_query(access_token, item['uri'])
-        item_activity_data = {x: item_data[x] for x in BACKGROUND_DATA_KEYS}
+        item_activity_data = data_for_keys(item_data, BACKGROUND_DATA_KEYS)
         activity_data['background_activities'].append(item_activity_data)
 
     # Get friend data.
     friends_items = get_items(access_token, user_data['team'])
     for item in friends_items:
         item_data = runkeeper_query(access_token, item['url'])
-        friends_social_data = {x: item_data[x] for x in FRIENDS_SOCIAL_KEYS}
+        friends_social_data = data_for_keys(item_data, FRIENDS_SOCIAL_KEYS)
         social_data['friends'].append(friends_social_data)
 
     # Get sleep data.
     sleep_items = get_items(access_token, user_data['sleep'])
     for item in sleep_items:
-        sleep_data = {x: item[x] for x in SLEEP_DATA_KEYS}
-        sleep_data['sleep_logs'].append(sleep_data)
+        sleep_log_data = data_for_keys(item, SLEEP_DATA_KEYS)
+        sleep_data['sleep_logs'].append(sleep_log_data)
 
     return {'activity_data': activity_data,
             'social_data': social_data,
@@ -136,60 +158,120 @@ def make_activity_dataset(data, filename, source, **kwargs):
 
     # Store background data as CSV files, if it exists.
     if data['background_activities']:
-        print "Writing background data to csv"
         background_data = data['background_activities']
-
-        # Gather data as CSV data in a StringIO file-like object.
-        csv_out_background = StringIO()
-        csv_writer_background = csv.writer(csv_out_background)
-        header = background_data[0].keys()
-        csv_writer_background.writerow(header)
+        # Format as CSV data in a StringIO file-like object.
+        csv_background = CSVIO()
+        csv_background.writerow(BACKGROUND_DATA_KEYS)
         for item in background_data:
-            print "Writing row..."
-            csv_writer_background.writerow([item[x] for x in header])
-
+            csv_background.writerow([item[x] for x in BACKGROUND_DATA_KEYS])
         # Add as file to the dataset.
-        csv_out_background.seek(0)
+        csv_background.seek(0)
         filename_csv_background = filename_base + '.background-activities.csv'
-        dataset.add_file(file=csv_out_background, name=filename_csv_background)
+        dataset.add_file(file=csv_background.filehandle,
+                         name=filename_csv_background)
 
     # Store fitness activity data in a pair of CSV files, if it exists.
     if data['fitness_activities']:
-        print "Writing fitness data to csv"
         fitness_data = data['fitness_activities']
-
         # Each fitness has summary data, and an array of GPS datapoints.
-        # Storing both as CSV data in a StringIO file-like object.
-        # Summary data...
-        csv_out_fitness_summary = StringIO()
-        csv_writer_fitness_summary = csv.writer(csv_out_fitness_summary)
-        csv_writer_fitness_summary.writerow(FITNESS_SUMMARY_KEYS)
-        # ... and path data, with URI to cross-reference with summary data.
-        csv_out_fitness_path = StringIO()
-        csv_writer_fitness_path = csv.writer(csv_out_fitness_path)
-        csv_writer_fitness_path.writerow(['uri'] + FITNESS_PATH_KEYS)
+        # Format each as CSV data in a StringIO file-like object.
+        csv_fitness_summary = CSVIO()
+        csv_fitness_summary.writerow(FITNESS_SUMMARY_KEYS)
+        csv_fitness_path = CSVIO()
+        # Path data includes URI for cross-reference with CSV summary data.
+        csv_fitness_path.writerow(['uri'] + FITNESS_PATH_KEYS)
 
         # Process fitness activity data into CSV data.
         for item in fitness_data:
-            print "Writing to summary file..."
-            csv_writer_fitness_summary.writerow([item[x] for
-                                                 x in FITNESS_SUMMARY_KEYS])
-            for datapoint in item['path']:
-                print "Writing to path file..."
-                csv_writer_fitness_path.writerow(
-                    [item['uri']] + [datapoint[x] for x in FITNESS_PATH_KEYS])
+            csv_fitness_summary.writerow([item[x] for x in
+                                          FITNESS_SUMMARY_KEYS])
+            for point in item['path']:
+                csv_fitness_path.writerow([item['uri']] + [point[x] for x in
+                                                           FITNESS_PATH_KEYS])
 
         # Add as files to the dataset.
-        csv_out_fitness_summary.seek(0)
-        csv_out_fitness_path.seek(0)
+        csv_fitness_summary.seek(0)
+        csv_fitness_path.seek(0)
         filename_csv_fitness_summary = (filename_base +
                                         '.fitness-activities-summary-data.csv')
         filename_csv_fitness_path = (filename_base +
                                      '.fitness-activities-path-data.csv')
-        dataset.add_file(file=csv_out_fitness_summary,
+        dataset.add_file(file=csv_fitness_summary.filehandle,
                          name=filename_csv_fitness_summary)
-        dataset.add_file(file=csv_out_fitness_path,
+        dataset.add_file(file=csv_fitness_path.filehandle,
                          name=filename_csv_fitness_path)
+
+    return dataset
+
+
+def make_social_dataset(data, filename, source, **kwargs):
+    dataset = get_dataset(filename, source, **kwargs)
+    filename_base = filename.rstrip('.tar.gz')
+
+    # Store data as JSON file.
+    json_out = StringIO(json.dumps(data, indent=2, sort_keys=True) + '\n')
+    filename_json = filename_base + '.json'
+    dataset.add_file(file=json_out, name=filename_json)
+
+    # Store user ID as a text file.
+    userID_io = StringIO(str(data['userID']))
+    userID_filename = filename_base + '.userID.txt'
+    dataset.add_file(file=userID_io, name=userID_filename)
+
+    # Store fitness activity sharing data as CSV file, if it exists.
+    if data['fitness_activity_sharing']:
+        activity_sharing_data = data['fitness_activity_sharing']
+        # Format as CSV data in a StringIO file-like object.
+        csv_activity_sharing = CSVIO()
+        csv_activity_sharing.writerow(FITNESS_SOCIAL_KEYS)
+        for item in activity_sharing_data:
+            csv_activity_sharing.writerow([item[x] for x in
+                                          FITNESS_SOCIAL_KEYS])
+        # Add as file to the dataset.
+        csv_activity_sharing.seek(0)
+        filename_activity_sharing = (filename_base +
+                                     '.fitness-activity-sharing.csv')
+        dataset.add_file(file=csv_activity_sharing.filehandle,
+                         name=filename_activity_sharing)
+
+    # Store friend data as CSV file, if it exists.
+    if data['friends']:
+        friends_data = data['friends']
+        # Format as CSV data in a StringIO file-like object.
+        csv_friends = CSVIO()
+        csv_friends.writerow(FRIENDS_SOCIAL_KEYS)
+        for item in friends_data:
+            csv_friends.writerow([item[x] for x in FRIENDS_SOCIAL_KEYS])
+        # Add as file to the dataset.
+        csv_friends.seek(0)
+        filename_csv_friends = filename_base + '.friends.csv'
+        dataset.add_file(file=csv_friends.filehandle,
+                         name=filename_csv_friends)
+
+    return dataset
+
+
+def make_sleep_dataset(data, filename, source, **kwargs):
+    dataset = get_dataset(filename, source, **kwargs)
+    filename_base = filename.rstrip('.tar.gz')
+
+    # Store data as JSON file.
+    json_out = StringIO(json.dumps(data, indent=2, sort_keys=True) + '\n')
+    filename_json = filename_base + '.json'
+    dataset.add_file(file=json_out, name=filename_json)
+
+    # Store sleep logs as a text file.
+    # Note that these must exist, otherwise this function would not be called.
+    sleep_logs_data = data['sleep_logs']
+    csv_sleep_logs = CSVIO()
+    csv_sleep_logs.writerow(SLEEP_DATA_KEYS)
+    for item in sleep_logs_data:
+        csv_sleep_logs.writerow([item[x] for x in SLEEP_DATA_KEYS])
+    # Add as file to the dataset.
+    csv_sleep_logs.seek(0)
+    filename_sleep_logs = (filename_base + '.sleep-logs.csv')
+    dataset.add_file(file=csv_sleep_logs.filehandle,
+                     name=filename_sleep_logs)
 
     return dataset
 
@@ -225,9 +307,8 @@ def create_runkeeper_ohdataset(access_token,
                           url='http://developer.runkeeper.com/healthgraph')
 
     # Make activity data file if there's activity data.
-    activity_data = runkeeper_data['activity_data']
-    if (activity_data['background_activities'] or
-            activity_data['fitness_activities']):
+    if (runkeeper_data['activity_data']['background_activities'] or
+            runkeeper_data['activity_data']['fitness_activities']):
         activity_dataset = make_activity_dataset(
             data=runkeeper_data['activity_data'],
             filename=filename_activity,
@@ -235,7 +316,30 @@ def create_runkeeper_ohdataset(access_token,
             **kwargs)
         activity_dataset.close()
         if update_url and task_id:
-            activity_dataset.update(update_url, task_id, )
+            activity_dataset.update(update_url, task_id,
+                                    subtype='activity-data')
+
+    # Make social data file if there's social data.
+    # Note this will always have at least one type of data: the user ID.
+    social_dataset = make_social_dataset(
+        data=runkeeper_data['social_data'],
+        filename=filename_social,
+        source=source,
+        **kwargs)
+    social_dataset.close()
+    if update_url and task_id:
+        activity_dataset.update(update_url, task_id, subtype='social-data')
+
+    # Make sleep data file if there's sleep log data.
+    if runkeeper_data['sleep_data']['sleep_logs']:
+        sleep_dataset = make_sleep_dataset(
+            data=runkeeper_data['sleep_data'],
+            filename=filename_sleep,
+            source=source,
+            **kwargs)
+        sleep_dataset.close()
+        if update_url and task_id:
+            activity_dataset.update(update_url, task_id, subtype='sleep-data')
 
 
 if __name__ == '__main__':
