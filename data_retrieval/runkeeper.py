@@ -23,6 +23,7 @@ datetime stamp, "January 2rd 2015 3:04:05am".)
 """
 from __future__ import unicode_literals
 
+from collections import OrderedDict
 from cStringIO import StringIO
 import csv
 import json
@@ -33,11 +34,11 @@ import requests
 from .participant_data_set import format_filename, get_dataset, OHDataSource
 
 BACKGROUND_DATA_KEYS = ['timestamp', 'steps', 'calories_burned', 'source']
-FITNESS_SUMMARY_KEYS = ['uri', 'type', 'equipment', 'start_time', 'utc_offset',
+FITNESS_SUMMARY_KEYS = ['type', 'equipment', 'start_time', 'utc_offset',
                         'total_distance', 'duration', 'total_calories',
                         'climb', 'source']
 FITNESS_PATH_KEYS = ['latitude', 'longitude', 'altitude', 'timestamp', 'type']
-FITNESS_SOCIAL_KEYS = ['uri', 'share', 'share_map']
+FITNESS_SOCIAL_KEYS = ['share', 'share_map']
 FRIENDS_SOCIAL_KEYS = ['userID', 'status']
 SLEEP_DATA_KEYS = ['timestamp', 'total_sleep', 'deep', 'rem', 'light', 'awake',
                    'times_woken', 'source']
@@ -57,6 +58,9 @@ def runkeeper_query(access_token, path, content_type=None):
 
 
 class CSVIO(object):
+    """
+    Shorthand for making a StringIO file-like object with CSV data.
+    """
     def __init__(self):
         self.filehandle = StringIO()
         self.csvwriter = csv.writer(self.filehandle)
@@ -69,6 +73,11 @@ class CSVIO(object):
 
 
 def get_items(access_token, path, recurse='both'):
+    """
+    Iterate to get all items for a given access_token and path.
+
+    RunKeeper uses the same pages format for items in various places.
+    """
     query_data = runkeeper_query(access_token, path)
     items = query_data['items']
     if 'previous' in query_data and recurse in ['both', 'prev']:
@@ -90,6 +99,9 @@ def get_items(access_token, path, recurse='both'):
 
 
 def data_for_keys(data_dict, data_keys):
+    """
+    Return a dict with data for requested keys, or empty strings if missing.
+    """
     data_out = {x: data_dict[x] if x in data_dict else '' for x in data_keys}
     return data_out
 
@@ -97,12 +109,67 @@ def data_for_keys(data_dict, data_keys):
 def get_runkeeper_data(access_token, user_data):
     """
     Get activity, social, and sleep data from RunKeeper for a given user.
+
+    Data is returned as a dict with the following format (pseudocode):
+    { 'activity_data':
+        { 'background_activities':
+            { item_uri:
+                { key: value for each of BACKGROUND_DATA_KEYS },
+              ...
+            },
+          'fitness_activities':
+            { item_uri:
+                { 'path': { key: value for each of FITNESS_PATH_KEYS },
+                  and key: value for each of the FITNESS_ACTIVITY_KEYS
+                },
+              ...
+            }
+        }
+      'social_data':
+        { 'fitness_activity_sharing':
+            { item_uri:
+                { key: value for each of FITNESS_SOCIAL_KEYS },
+              ...
+            },
+          'friends':
+            { item_url:
+                { key: value for each of FRIENDS_SOCIAL_KEYS },
+              ...
+            },
+          'userID': userID
+        },
+      'sleep_data':
+        { 'sleep_logs':
+            { item_uri:
+                { key: value for each of SLEEP_DATA_KEYS },
+              ...
+            }
+        }
+    }
+
+    Notes:
+        - the data for the following keys are OrderedDict objects where the
+          each key is the item URI (or URL) used to retrieve data:
+          ['activity_data']['background_activities']
+          ['activity_data']['fitness_activities']
+          ['social_data']['fitness_activity_sharing']
+          ['social_data']['friends']
+          ['sleep_data']['sleep_logs']
+          This is done to preserve order that items are listed by RunKeeper.
+
+        - The item_uri for fitness_activities matches item_uri in
+          fitness_activity_sharing.
+
+        - As of May 2015, RunKeeper's API uses 'url' for 'friends' data instead
+          of 'uri'.
     """
     # Initial data storage.
-    activity_data = {'fitness_activities': [], 'background_activities': []}
-    social_data = {'fitness_activity_sharing': [], 'friends': [],
+    activity_data = {'fitness_activities': OrderedDict(),
+                     'background_activities': OrderedDict()}
+    social_data = {'fitness_activity_sharing': OrderedDict(),
+                   'friends': OrderedDict(),
                    'userID': user_data['userID']}
-    sleep_data = {'sleep_logs': []}
+    sleep_data = {'sleep_logs': OrderedDict() }
 
     # Get activity data.
     fitness_activity_items = get_items(
@@ -120,29 +187,29 @@ def get_runkeeper_data(access_token, user_data):
         item_activity_data['path'] = [
             data_for_keys(datapoint, FITNESS_PATH_KEYS)
             for datapoint in item_data['path']]
-        activity_data['fitness_activities'].append(item_activity_data)
+        activity_data['fitness_activities'][item['uri']] = item_activity_data
         # Record social data.
         item_social_data = data_for_keys(item_data, FITNESS_SOCIAL_KEYS)
-        social_data['fitness_activity_sharing'].append(item_social_data)
+        social_data['fitness_activity_sharing'][item['uri']] = item_social_data
     # Background activities.
     for item in background_activity_items:
         item_data = runkeeper_query(access_token, item['uri'])
-        item_activity_data = data_for_keys(item_data, BACKGROUND_DATA_KEYS)
-        activity_data['background_activities'].append(item_activity_data)
+        item_bkgrnd_data = data_for_keys(item_data, BACKGROUND_DATA_KEYS)
+        activity_data['background_activities'][item['uri']] = item_bkgrnd_data
 
     # Get friend data.
     friends_items = get_items(access_token, user_data['team'])
     for item in friends_items:
         item_data = runkeeper_query(access_token, item['url'])
         friends_social_data = data_for_keys(item_data, FRIENDS_SOCIAL_KEYS)
-        social_data['friends'].append(friends_social_data)
+        social_data['friends'][item['url']] = friends_social_data
 
     # Get sleep data.
     sleep_items = get_items(access_token, user_data['sleep'])
     for item in sleep_items:
         item_data = runkeeper_query(access_token, item['uri'])
         sleep_log_data = data_for_keys(item_data, SLEEP_DATA_KEYS)
-        sleep_data['sleep_logs'].append(sleep_log_data)
+        sleep_data['sleep_logs'][item['uri']] = sleep_log_data
 
     return {'activity_data': activity_data,
             'social_data': social_data,
@@ -150,6 +217,9 @@ def get_runkeeper_data(access_token, user_data):
 
 
 def make_activity_dataset(data, filename, source, **kwargs):
+    """
+    Process activity data to create OHDataSet with JSON and CSV data files.
+    """
     dataset = get_dataset(filename, source, **kwargs)
     filename_base = filename.rstrip('.tar.gz')
 
@@ -163,9 +233,10 @@ def make_activity_dataset(data, filename, source, **kwargs):
         background_data = data['background_activities']
         # Format as CSV data in a StringIO file-like object.
         csv_background = CSVIO()
-        csv_background.writerow(BACKGROUND_DATA_KEYS)
-        for item in background_data:
-            csv_background.writerow([item[x] for x in BACKGROUND_DATA_KEYS])
+        csv_background.writerow(['uri'] + BACKGROUND_DATA_KEYS)
+        for item_uri in background_data.keys():
+            csv_background.writerow([item_uri] + [
+                background_data[item_uri][x] for x in BACKGROUND_DATA_KEYS])
         # Add as file to the dataset.
         csv_background.seek(0)
         filename_csv_background = filename_base + '.background-activities.csv'
@@ -178,18 +249,18 @@ def make_activity_dataset(data, filename, source, **kwargs):
         # Each fitness has summary data, and an array of GPS datapoints.
         # Format each as CSV data in a StringIO file-like object.
         csv_fitness_summary = CSVIO()
-        csv_fitness_summary.writerow(FITNESS_SUMMARY_KEYS)
+        csv_fitness_summary.writerow(['uri'] + FITNESS_SUMMARY_KEYS)
         csv_fitness_path = CSVIO()
         # Path data includes URI for cross-reference with CSV summary data.
         csv_fitness_path.writerow(['uri'] + FITNESS_PATH_KEYS)
 
         # Process fitness activity data into CSV data.
-        for item in fitness_data:
-            csv_fitness_summary.writerow([item[x] for x in
-                                          FITNESS_SUMMARY_KEYS])
-            for point in item['path']:
-                csv_fitness_path.writerow([item['uri']] + [point[x] for x in
-                                                           FITNESS_PATH_KEYS])
+        for item_uri in fitness_data.keys():
+            csv_fitness_summary.writerow([item_uri] + [
+                fitness_data[item_uri][x] for x in FITNESS_SUMMARY_KEYS])
+            for point in fitness_data[item_uri]['path']:
+                csv_fitness_path.writerow([item_uri] + [point[x] for x in
+                                                        FITNESS_PATH_KEYS])
 
         # Add as files to the dataset.
         csv_fitness_summary.seek(0)
@@ -207,6 +278,9 @@ def make_activity_dataset(data, filename, source, **kwargs):
 
 
 def make_social_dataset(data, filename, source, **kwargs):
+    """
+    Process social data to create OHDataSet with JSON and CSV data files.
+    """
     dataset = get_dataset(filename, source, **kwargs)
     filename_base = filename.rstrip('.tar.gz')
 
@@ -225,10 +299,11 @@ def make_social_dataset(data, filename, source, **kwargs):
         activity_sharing_data = data['fitness_activity_sharing']
         # Format as CSV data in a StringIO file-like object.
         csv_activity_sharing = CSVIO()
-        csv_activity_sharing.writerow(FITNESS_SOCIAL_KEYS)
-        for item in activity_sharing_data:
-            csv_activity_sharing.writerow([item[x] for x in
-                                          FITNESS_SOCIAL_KEYS])
+        csv_activity_sharing.writerow(['uri'] + FITNESS_SOCIAL_KEYS)
+        for item_uri in activity_sharing_data.keys():
+            csv_activity_sharing.writerow([item_uri] + [
+                activity_sharing_data[item_uri][x] for x
+                in FITNESS_SOCIAL_KEYS])
         # Add as file to the dataset.
         csv_activity_sharing.seek(0)
         filename_activity_sharing = (filename_base +
@@ -241,9 +316,10 @@ def make_social_dataset(data, filename, source, **kwargs):
         friends_data = data['friends']
         # Format as CSV data in a StringIO file-like object.
         csv_friends = CSVIO()
-        csv_friends.writerow(FRIENDS_SOCIAL_KEYS)
-        for item in friends_data:
-            csv_friends.writerow([item[x] for x in FRIENDS_SOCIAL_KEYS])
+        csv_friends.writerow(['url'] + FRIENDS_SOCIAL_KEYS)
+        for item_url in friends_data.keys():
+            csv_friends.writerow([item_url] + [
+                friends_data[item_url][x] for x in FRIENDS_SOCIAL_KEYS])
         # Add as file to the dataset.
         csv_friends.seek(0)
         filename_csv_friends = filename_base + '.friends.csv'
@@ -254,6 +330,9 @@ def make_social_dataset(data, filename, source, **kwargs):
 
 
 def make_sleep_dataset(data, filename, source, **kwargs):
+    """
+    Process sleep data to create OHDataSet with JSON and CSV data files.
+    """
     dataset = get_dataset(filename, source, **kwargs)
     filename_base = filename.rstrip('.tar.gz')
 
@@ -266,9 +345,10 @@ def make_sleep_dataset(data, filename, source, **kwargs):
     # Note that these must exist, otherwise this function would not be called.
     sleep_logs_data = data['sleep_logs']
     csv_sleep_logs = CSVIO()
-    csv_sleep_logs.writerow(SLEEP_DATA_KEYS)
-    for item in sleep_logs_data:
-        csv_sleep_logs.writerow([item[x] for x in SLEEP_DATA_KEYS])
+    csv_sleep_logs.writerow(['uri'] + SLEEP_DATA_KEYS)
+    for item_uri in sleep_logs_data.keys():
+        csv_sleep_logs.writerow([item_uri] + [
+            sleep_logs_data[item_uri][x] for x in SLEEP_DATA_KEYS])
     # Add as file to the dataset.
     csv_sleep_logs.seek(0)
     filename_sleep_logs = (filename_base + '.sleep-logs.csv')
@@ -330,7 +410,7 @@ def create_runkeeper_ohdataset(access_token,
         **kwargs)
     social_dataset.close()
     if update_url and task_id:
-        activity_dataset.update(update_url, task_id, subtype='social-data')
+        social_dataset.update(update_url, task_id, subtype='social-data')
 
     # Make sleep data file if there's sleep log data.
     if runkeeper_data['sleep_data']['sleep_logs']:
@@ -341,7 +421,7 @@ def create_runkeeper_ohdataset(access_token,
             **kwargs)
         sleep_dataset.close()
         if update_url and task_id:
-            activity_dataset.update(update_url, task_id, subtype='sleep-data')
+            sleep_dataset.update(update_url, task_id, subtype='sleep-data')
 
 
 if __name__ == '__main__':
