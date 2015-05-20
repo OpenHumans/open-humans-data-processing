@@ -406,16 +406,16 @@ class S3OHDataSet(OHDataSet):
         print 'Done copying to S3, removing temp dir %s' % self.s3file_tmpdir
         os.rmdir(self.s3file_tmpdir)
 
-    def update(self, update_url, task_id):
+    def update(self, update_url, task_id, subtype=None):
         if not (task_id and update_url):
             return
 
-        print ('Updating main site (%s) with completed files for task_id=%s.' %
-               (update_url, task_id))
+        task_data = {'task_id': task_id, 's3_keys': [self.s3_key_name]}
+        status_msg = ('Updating main site (%s) with ' % update_url +
+                      'completed files for task_id=%s' % task_id)
+        if subtype:
+            task_data['subtype'] = subtype
+            status_msg += ' and subtype=%s' % subtype
 
-        requests.post(update_url, data={
-            'task_data': json.dumps({
-                'task_id': task_id,
-                's3_keys': [self.s3_key_name],
-            })
-        })
+        print (status_msg)
+        requests.post(update_url, data={'task_data': json.dumps(task_data)})

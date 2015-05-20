@@ -20,6 +20,7 @@ from data_retrieval.american_gut import create_amgut_ohdatasets
 from data_retrieval.pgp_harvard import create_pgpharvard_ohdatasets
 from data_retrieval.twenty_three_and_me import create_23andme_ohdataset
 from data_retrieval.go_viral import create_go_viral_ohdataset
+from data_retrieval.runkeeper import create_runkeeper_ohdataset
 
 from celery_worker import make_worker
 
@@ -175,6 +176,14 @@ def make_go_viral_ohdataset(**task_params):
     create_go_viral_ohdataset(**task_params)
 
 
+@celery_worker.task
+def make_runkeeper_ohdataset(**task_params):
+    """
+    Task to initiate retrieval of RunKeeper data set
+    """
+    create_runkeeper_ohdataset(**task_params)
+
+
 # Pages to receive task requests
 @ohdata_app.route('/twenty_three_and_me', methods=['GET', 'POST'])
 def twenty_three_and_me():
@@ -227,6 +236,19 @@ def go_viral():
     task_params = json.loads(request.args['task_params'])
     make_go_viral_ohdataset.delay(**task_params)
     return 'GoViral dataset started'
+
+
+@ohdata_app.route('/runkeeper', methods=['GET', 'POST'])
+def runkeeper():
+    """
+    Page to receive RunKeeper task request
+
+    'task_params' specific to this task:
+        'access_token' (string, token for accessing data via RunKeeper API)
+    """
+    task_params = json.loads(request.args['task_params'])
+    make_runkeeper_ohdataset.delay(**task_params)
+    return 'RunKeeper dataset started'
 
 
 @ohdata_app.route('/', methods=['GET', 'POST'])
