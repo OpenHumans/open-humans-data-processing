@@ -191,6 +191,7 @@ def create_amgut_ohdataset(barcode,
     print 'Adding remote file from ' + fastq_url
 
     dataset.add_remote_file(url=fastq_url)
+    dataset.metadata['american_gut_sample_barcode'] = barcode
     dataset.close()
 
     dataset.update(update_url, task_id)

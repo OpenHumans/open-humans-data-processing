@@ -225,6 +225,8 @@ def create_pgpharvard_ohdatasets(huID,
         datasets.append(dataset)
 
     for dataset in datasets:
+        dataset.metadata['pgp_harvard_id'] = huID
+
         print 'Closing dataset'
         dataset.close()
 
