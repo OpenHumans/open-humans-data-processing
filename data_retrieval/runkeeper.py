@@ -123,7 +123,8 @@ def get_runkeeper_data(access_token, user_data):
                   and key: value for each of the FITNESS_ACTIVITY_KEYS
                 },
               ...
-            }
+            },
+          'userID': userID
         }
       'social_data':
         { 'fitness_activity_sharing':
@@ -143,7 +144,8 @@ def get_runkeeper_data(access_token, user_data):
             { item_uri:
                 { key: value for each of SLEEP_DATA_KEYS },
               ...
-            }
+            },
+          'user_id': userID
         }
     }
 
@@ -165,11 +167,13 @@ def get_runkeeper_data(access_token, user_data):
     """
     # Initial data storage.
     activity_data = {'fitness_activities': OrderedDict(),
-                     'background_activities': OrderedDict()}
+                     'background_activities': OrderedDict(),
+                     'userID': user_data['userID']}
     social_data = {'fitness_activity_sharing': OrderedDict(),
                    'friends': OrderedDict(),
                    'userID': user_data['userID']}
-    sleep_data = {'sleep_logs': OrderedDict() }
+    sleep_data = {'sleep_logs': OrderedDict(),
+                  'userID': user_data['userID']}
 
     # Get activity data.
     fitness_activity_items = get_items(
@@ -227,6 +231,11 @@ def make_activity_dataset(data, filename, source, **kwargs):
     json_out = StringIO(json.dumps(data, indent=2, sort_keys=True) + '\n')
     filename_json = filename_base + '.json'
     dataset.add_file(file=json_out, name=filename_json)
+
+    # Store user ID as a text file.
+    userID_io = StringIO(str(data['userID']))
+    userID_filename = filename_base + '.userID.txt'
+    dataset.add_file(file=userID_io, name=userID_filename)
 
     # Store background data as CSV files, if it exists.
     if data['background_activities']:
@@ -341,6 +350,11 @@ def make_sleep_dataset(data, filename, source, **kwargs):
     filename_json = filename_base + '.json'
     dataset.add_file(file=json_out, name=filename_json)
 
+    # Store user ID as a text file.
+    userID_io = StringIO(str(data['userID']))
+    userID_filename = filename_base + '.userID.txt'
+    dataset.add_file(file=userID_io, name=userID_filename)
+
     # Store sleep logs as a text file.
     # Note that these must exist, otherwise this function would not be called.
     sleep_logs_data = data['sleep_logs']
@@ -396,21 +410,24 @@ def create_runkeeper_ohdataset(access_token,
             filename=filename_activity,
             source=source,
             **kwargs)
+        activity_dataset.metadata['runkeeper_id'] = str(user_data['userID'])
         activity_dataset.close()
         if update_url and task_id:
             activity_dataset.update(update_url, task_id,
                                     subtype='activity-data')
 
     # Make social data file if there's social data.
-    # Note this will always have at least one type of data: the user ID.
-    social_dataset = make_social_dataset(
-        data=runkeeper_data['social_data'],
-        filename=filename_social,
-        source=source,
-        **kwargs)
-    social_dataset.close()
-    if update_url and task_id:
-        social_dataset.update(update_url, task_id, subtype='social-data')
+    if (runkeeper_data['social_data']['fitness_activity_sharing'] or
+            runkeeper_data['social_data']['friends']):
+        social_dataset = make_social_dataset(
+            data=runkeeper_data['social_data'],
+            filename=filename_social,
+            source=source,
+            **kwargs)
+        social_dataset.metadata['runkeeper_id'] = str(user_data['userID'])
+        social_dataset.close()
+        if update_url and task_id:
+            social_dataset.update(update_url, task_id, subtype='social-data')
 
     # Make sleep data file if there's sleep log data.
     if runkeeper_data['sleep_data']['sleep_logs']:
@@ -419,6 +436,7 @@ def create_runkeeper_ohdataset(access_token,
             filename=filename_sleep,
             source=source,
             **kwargs)
+        sleep_dataset.metadata['runkeeper_id'] = str(user_data['userID'])
         sleep_dataset.close()
         if update_url and task_id:
             sleep_dataset.update(update_url, task_id, subtype='sleep-data')

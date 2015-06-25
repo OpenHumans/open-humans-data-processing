@@ -66,6 +66,7 @@ def create_go_viral_ohdataset(access_token, go_viral_id,
 
     dataset.add_file(file=StringIO(json.dumps(data_go_viral, indent=2)),
                      name='go-viral.json')
+    dataset.metadata['goviral_id'] = go_viral_id
     dataset.close()
 
     dataset.update(update_url, task_id)
