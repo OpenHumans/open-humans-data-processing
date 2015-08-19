@@ -19,6 +19,7 @@ May be used on the command line from this project's base directory, e.g.
 """
 
 import json
+import os
 import re
 import sys
 
@@ -30,6 +31,12 @@ import requests
 from bs4 import BeautifulSoup
 
 from .participant_data_set import format_filename, get_dataset, OHDataSource
+
+BASE_URL = 'https://my.pgp-hms.org'
+
+if os.environ.get('ENV') == 'staging':
+    PASSWORD = os.environ.get('PGP_PASSWORD')
+    BASE_URL = 'https://{}@my-dev.pgp-hms.org'.format(PASSWORD)
 
 
 def parse_uploaded_div(profile_soup):
@@ -150,7 +157,7 @@ def parse_pgp_profile_page(huID):
     returns: (tuple) of (genome_file_links, surveys), which are (respectively)
              the outputs from parse_uploaded_div and parse_survey_div.
     """
-    url = 'http://my.pgp-hms.org/profile/%s' % huID
+    url = '{}/profile/{}'.format(BASE_URL, huID)
     profile_page = requests.get(url)
     assert profile_page.status_code == 200
 
@@ -181,7 +188,7 @@ def create_pgpharvard_ohdatasets(huID,
     'filedir') must be specified.
     """
     source = OHDataSource(name='Harvard Personal Genome Project',
-                          url='http://my.pgp-hms.org/profile/%s' % huID)
+                          url='{}/profile/{}'.format(BASE_URL, huID))
 
     identifier = 'individual-{}'.format(huID)
 
