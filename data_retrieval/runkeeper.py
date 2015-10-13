@@ -111,7 +111,7 @@ def get_runkeeper_data(access_token, user_data):
     Get activity, social, and sleep data from RunKeeper for a given user.
 
     Data is returned as a dict with the following format (pseudocode):
-    { 'activity_data':
+    { 'activities_data':
         { 'background_activities':
             { item_uri:
                 { key: value for each of BACKGROUND_DATA_KEYS },
@@ -152,8 +152,8 @@ def get_runkeeper_data(access_token, user_data):
     Notes:
         - the data for the following keys are OrderedDict objects where the
           each key is the item URI (or URL) used to retrieve data:
-          ['activity_data']['background_activities']
-          ['activity_data']['fitness_activities']
+          ['activities_data']['background_activities']
+          ['activities_data']['fitness_activities']
           ['social_data']['fitness_activity_sharing']
           ['social_data']['friends']
           ['sleep_data']['sleep_logs']
@@ -215,7 +215,7 @@ def get_runkeeper_data(access_token, user_data):
         sleep_log_data = data_for_keys(item_data, SLEEP_DATA_KEYS)
         sleep_data['sleep_logs'][item['uri']] = sleep_log_data
 
-    return {'activity_data': activity_data,
+    return {'activities_data': activity_data,
             'social_data': social_data,
             'sleep_data': sleep_data}
 
@@ -396,17 +396,17 @@ def create_runkeeper_ohdataset(access_token,
 
     identifier = 'individual-{}'.format(user_data['userID'])
     filename_activity = format_filename('RunKeeper', identifier,
-                                        'activity-data')
+                                        'activities-data')
     filename_social = format_filename('RunKeeper', identifier, 'social-data')
     filename_sleep = format_filename('RunKeeper', identifier, 'sleep-data')
     source = OHDataSource(name='RunKeeper Health Graph API',
                           url='http://developer.runkeeper.com/healthgraph')
 
     # Make activity data file if there's activity data.
-    if (runkeeper_data['activity_data']['background_activities'] or
-            runkeeper_data['activity_data']['fitness_activities']):
+    if (runkeeper_data['activities_data']['background_activities'] or
+            runkeeper_data['activities_data']['fitness_activities']):
         activity_dataset = make_activity_dataset(
-            data=runkeeper_data['activity_data'],
+            data=runkeeper_data['activities_data'],
             filename=filename_activity,
             source=source,
             **kwargs)
@@ -414,7 +414,7 @@ def create_runkeeper_ohdataset(access_token,
         activity_dataset.close()
         if update_url and task_id:
             activity_dataset.update(update_url, task_id,
-                                    subtype='activity-data')
+                                    subtype='activities-data')
 
     # Make social data file if there's social data.
     if (runkeeper_data['social_data']['fitness_activity_sharing'] or
