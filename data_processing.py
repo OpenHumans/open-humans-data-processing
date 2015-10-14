@@ -8,13 +8,18 @@ import json
 import logging
 import os
 
+import requests
+
 from celery.signals import (after_setup_logger, after_task_publish,
                             task_postrun, task_prerun)
 
 from flask import Flask, request
 from flask_sslify import SSLify
 
-import requests
+from raven.contrib.flask import Sentry
+from werkzeug.contrib.fixers import ProxyFix
+
+from celery_worker import make_worker
 
 from data_retrieval.american_gut import create_amgut_ohdatasets
 from data_retrieval.pgp_harvard import create_pgpharvard_ohdatasets
@@ -22,9 +27,7 @@ from data_retrieval.twenty_three_and_me import create_23andme_ohdataset
 from data_retrieval.go_viral import create_go_viral_ohdataset
 from data_retrieval.runkeeper import create_runkeeper_ohdataset
 
-from celery_worker import make_worker
-
-ohdata_app = Flask(__name__)
+app = Flask(__name__)
 
 DEBUG = os.getenv('DEBUG', False)
 PORT = os.getenv('PORT', 5000)
@@ -32,7 +35,11 @@ PORT = os.getenv('PORT', 5000)
 logging.basicConfig(level=logging.DEBUG if DEBUG else logging.INFO)
 logging.info('Starting data-processing')
 
-ohdata_app.config.update(
+# trust X-Forwarded-For on Heroku for better debugging information with Sentry
+if os.getenv('HEROKU') == 'true':
+    app.wsgi_app = ProxyFix(app.wsgi_app)
+
+app.config.update(
     DEBUG=DEBUG,
     CELERY_BROKER_URL=os.environ.get('CLOUDAMQP_URL', 'amqp://'),
     CELERY_ACCEPT_CONTENT=['json'],
@@ -41,9 +48,10 @@ ohdata_app.config.update(
     CELERYD_LOG_COLOR=True,
     BROKER_POOL_LIMIT=0)
 
-sslify = SSLify(ohdata_app)
+sentry = Sentry(app)
+sslify = SSLify(app)
 
-celery_worker = make_worker(ohdata_app)
+celery_worker = make_worker(app)
 
 
 @after_setup_logger.connect
@@ -90,7 +98,7 @@ def task_sent_handler_cb(sender=None, body=None, **other_kwargs):
     """
     Send update that task has been sent to queue.
     """
-    if sender == 'client.task_update':
+    if sender == 'data_processing.task_update':
         return
 
     logging.debug('after_task_publish sender: %s', sender)
@@ -185,7 +193,7 @@ def make_runkeeper_ohdataset(**task_params):
 
 
 # Pages to receive task requests
-@ohdata_app.route('/twenty_three_and_me', methods=['GET', 'POST'])
+@app.route('/twenty_three_and_me', methods=['GET', 'POST'])
 def twenty_three_and_me():
     """
     Page to receive 23andme task request
@@ -199,7 +207,7 @@ def twenty_three_and_me():
     return '23andMe dataset started'
 
 
-@ohdata_app.route('/american_gut', methods=['GET', 'POST'])
+@app.route('/american_gut', methods=['GET', 'POST'])
 def american_gut():
     """
     Page to receive American Gut task request
@@ -212,7 +220,7 @@ def american_gut():
     return 'Amgut dataset started'
 
 
-@ohdata_app.route('/pgp', methods=['GET', 'POST'])
+@app.route('/pgp', methods=['GET', 'POST'])
 def pgp_harvard():
     """
     Page to receive PGP Harvard task request
@@ -225,7 +233,7 @@ def pgp_harvard():
     return 'PGP Harvard dataset started'
 
 
-@ohdata_app.route('/go_viral', methods=['GET', 'POST'])
+@app.route('/go_viral', methods=['GET', 'POST'])
 def go_viral():
     """
     Page to receive GoViral task request
@@ -238,7 +246,7 @@ def go_viral():
     return 'GoViral dataset started'
 
 
-@ohdata_app.route('/runkeeper', methods=['GET', 'POST'])
+@app.route('/runkeeper', methods=['GET', 'POST'])
 def runkeeper():
     """
     Page to receive RunKeeper task request
@@ -251,7 +259,7 @@ def runkeeper():
     return 'RunKeeper dataset started'
 
 
-@ohdata_app.route('/', methods=['GET', 'POST'])
+@app.route('/', methods=['GET', 'POST'])
 def main_page():
     """
     Main page for the app.
