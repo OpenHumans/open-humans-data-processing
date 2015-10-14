@@ -1,0 +1,14 @@
+beautifulsoup4==4.4.1
+boto==2.38.0
+celery==3.1.18
+Flask-SSLify==0.1.5
+Flask==0.10.1
+gevent==1.0.2
+nose==1.3.7
+raven==5.7.2
+requests==2.8.1
+uWSGI==2.0.11.2
+Werkzeug==0.10.4
+
+# this comes from raven[flask] but pip-tools doesn't support extras yet
+blinker>=1.1
