@@ -78,6 +78,7 @@ def get_items(access_token, path, recurse='both'):
 
     RunKeeper uses the same pages format for items in various places.
     """
+    print path
     query_data = runkeeper_query(access_token, path)
     items = query_data['items']
     if 'previous' in query_data and recurse in ['both', 'prev']:
@@ -95,6 +96,7 @@ def get_items(access_token, path, recurse='both'):
                          "match expected array size ({})").format(
                 path, len(items), query_data['size'])
             raise AssertionError(error_msg)
+    print items
     return items
 
 
@@ -177,9 +179,9 @@ def get_runkeeper_data(access_token, user_data):
 
     # Get activity data.
     fitness_activity_items = get_items(
-        access_token, user_data['fitness_activities'])
+        access_token, user_data['fitness_activities'] + '?pageSize=1000')
     background_activity_items = get_items(
-        access_token, user_data['background_activities'])
+        access_token, user_data['background_activities'] + '?pageSize=1000')
     # Fitness activities.
     for item in fitness_activity_items:
         item_data = runkeeper_query(
@@ -202,14 +204,14 @@ def get_runkeeper_data(access_token, user_data):
         activity_data['background_activities'][item['uri']] = item_bkgrnd_data
 
     # Get friend data.
-    friends_items = get_items(access_token, user_data['team'])
+    friends_items = get_items(access_token, user_data['team'] + '?pageSize=1000')
     for item in friends_items:
         item_data = runkeeper_query(access_token, item['url'])
         friends_social_data = data_for_keys(item_data, FRIENDS_SOCIAL_KEYS)
         social_data['friends'][item['url']] = friends_social_data
 
     # Get sleep data.
-    sleep_items = get_items(access_token, user_data['sleep'])
+    sleep_items = get_items(access_token, user_data['sleep'] + '?pageSize=1000')
     for item in sleep_items:
         item_data = runkeeper_query(access_token, item['uri'])
         sleep_log_data = data_for_keys(item_data, SLEEP_DATA_KEYS)

@@ -28,27 +28,12 @@ from bs4 import BeautifulSoup
 
 from .participant_data_set import format_filename, get_dataset, OHDataSource
 
-BARCODE_TO_SAMPACC_FILE = os.path.join(
+SURVEYID_TO_SAMPACC_FILE = os.path.join(
     os.path.dirname(__file__),
     'american-gut',
-    'barcode_to_sample_accession.json')
+    'survey_id_to_sample_accession.json')
 
-EBI_STUDY_ACCESSIONS = ['ERP003819',
-                        'ERP003820',
-                        'ERP003821',
-                        'ERP003822',
-                        'ERP005361',
-                        'ERP005362',
-                        'ERP005366',
-                        'ERP005367',
-                        'ERP005651',
-                        'ERP005821',
-                        'ERP005949',
-                        'ERP006349',
-                        'ERP008512',
-                        'ERP008604',
-                        'ERP008617',
-                        ]
+EBI_STUDY_ACCESSIONS = ['ERP012803']
 
 MAX_ATTEMPTS = 5
 
@@ -78,7 +63,7 @@ def get_ebi_info_set(accession, fields_list=None):
         url = url + '&fields=%(fields)s' % {'fields': fields}
 
     req = get_ebi_url_response(url)
-    ebi_data = [line.split('\t') for line in req.text.split('\n')]
+    ebi_data = [line.split('\t') for line in req.text.split('\n') if line]
     header_data = ebi_data[0]
 
     ebi_info_set = [{header_data[i]: row[i] for i in range(len(row))}
@@ -101,6 +86,56 @@ def fetch_metadata_xml(accession):
                                      if attr('VALUE')[0].contents else None)
         for attr in soup('SAMPLE_ATTRIBUTE')
     }
+
+
+def update_surveyid_to_sampleacc(storage_filepath,
+                                 study_accessions=EBI_STUDY_ACCESSIONS,
+                                 max_additions=100):
+    """
+    Script to build the correspondence of survey IDs to sample accessions.
+
+    On EBI, survey IDs are only available through the metadata for a sample.
+    To determine which sample accessions correspond to survey IDs, we need to
+    query all samples. Once we've retrieved this, we store as a file so we
+    don't need to do this again.
+    """
+    if os.path.exists(storage_filepath):
+        with open(storage_filepath) as f:
+            survey_to_samples = json.load(f)
+    else:
+        survey_to_samples = {}
+
+    samples_present = set([i for sl in
+                           [survey_to_samples[x] for x in survey_to_samples]
+                           for i in sl])
+
+    fields_list = ['sample_accession']
+
+    additions = 0
+    for study_acc in study_accessions:
+        sample_set = get_ebi_info_set(accession=study_acc,
+                                      fields_list=fields_list)
+        for sample in sample_set:
+            if not sample['sample_accession']:
+                continue
+            if sample['sample_accession'] in samples_present:
+                continue
+            metadata = fetch_metadata_xml(accession=sample['sample_accession'])
+            survey_id = metadata['survey_id']
+            if survey_id in survey_to_samples:
+                survey_to_samples[survey_id].append(sample['sample_accession'])
+            else:
+                survey_to_samples[survey_id] = [sample['sample_accession']]
+            additions += 1
+            if additions >= max_additions:
+                break
+        if additions >= max_additions:
+            break
+
+    with open(storage_filepath, 'w') as f:
+        json.dump(survey_to_samples, f, indent=2)
+
+    return additions
 
 
 def _get_all_barcodes(accessions=EBI_STUDY_ACCESSIONS):
@@ -137,10 +172,9 @@ def create_amgut_ohdataset(barcode,
     """
     Create a dataset from an American Gut barcode.
     """
-    # For mapping barcodes to sample accessions.
-    # TODO: keep this in memory?
-    with open(BARCODE_TO_SAMPACC_FILE) as filedata:
-        barcode_to_sampacc = json.loads(''.join(filedata.readlines()))
+    # For mapping survey IDs to sample accessions.
+    with open(SURVEYID_TO_SAMPACC_FILE) as filedata:
+        surveyid_to_sampacc = json.loads(''.join(filedata.readlines()))
 
     identifier = 'sample-{}'.format(barcode)
     filename = format_filename('american-gut', identifier, 'microbiome-16S')
@@ -152,9 +186,9 @@ def create_amgut_ohdataset(barcode,
 
     try:
         ebi_information = get_ebi_info_set(
-            accession=barcode_to_sampacc[barcode])[0]
+            accession=surveyid_to_sampacc[barcode])[0]
     except KeyError:
-        # If we can't match the barcode to sample accession, the data isn't
+        # If we can't match the survey ID to sample accession, the data isn't
         # yet available in EBI. This situation might arise if the sample hasn't
         # been analyzed yet (but American Gut is still offering the barcode to
         # Open Humans). Conclusion by OH should be "Data not available."
