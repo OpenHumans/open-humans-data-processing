@@ -163,9 +163,15 @@ def make_23andme_ohdataset(**task_params):
 @celery_worker.task
 def make_amgut_ohdataset(**task_params):
     """
-    Task to initiate retrieval of American Gut data set
+    Task to initiate retrieval of American Gut data set.
+
+    Data retrieval is based on the survey IDs, which American Gut pushes
+    to Open Humans as an object in the generic 'data' field, e.g.:
+    { 'surveyIds': [ '614a55f251eb12ec' ] }
     """
-    create_amgut_ohdatasets(**task_params)
+    data = task_params.pop('data')
+    if 'surveyIds' in data:
+        create_amgut_ohdatasets(survey_ids=data['surveyIds'], **task_params)
 
 
 @celery_worker.task
@@ -213,7 +219,7 @@ def american_gut():
     Page to receive American Gut task request
 
     'task_params' specific to this task:
-        'barcodes' (array of strings with American Gut sample barcodes)
+        'surveyIds' (array of strings with American Gut survey IDs)
     """
     task_params = json.loads(request.args['task_params'])
     make_amgut_ohdataset.delay(**task_params)
