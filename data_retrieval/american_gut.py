@@ -158,7 +158,7 @@ def _get_all_barcodes(accessions=EBI_STUDY_ACCESSIONS):
             # Notes on barcodes: The standard barcode seems to be 9 digits,
             # but many don't match this pattern. Most are probably blanks and
             # other controls. To be safe, we save information for all of them.
-            barcode = sample_info['library_name'].split(':')[0]
+            barcode = sample_info['library_name'].split('.')[1]
 
             acc_from_barcode[barcode] = sample_info['sample_accession']
 
