@@ -78,7 +78,6 @@ def get_items(access_token, path, recurse='both'):
 
     RunKeeper uses the same pages format for items in various places.
     """
-    print path
     query_data = runkeeper_query(access_token, path)
     items = query_data['items']
     if 'previous' in query_data and recurse in ['both', 'prev']:
@@ -96,7 +95,6 @@ def get_items(access_token, path, recurse='both'):
                          "match expected array size ({})").format(
                 path, len(items), query_data['size'])
             raise AssertionError(error_msg)
-    print items
     return items
 
 
@@ -113,7 +111,7 @@ def get_runkeeper_data(access_token, user_data):
     Get activity, social, and sleep data from RunKeeper for a given user.
 
     Data is returned as a dict with the following format (pseudocode):
-    { 'activities_data':
+    { 'activity_data':
         { 'background_activities':
             { item_uri:
                 { key: value for each of BACKGROUND_DATA_KEYS },
@@ -154,8 +152,8 @@ def get_runkeeper_data(access_token, user_data):
     Notes:
         - the data for the following keys are OrderedDict objects where the
           each key is the item URI (or URL) used to retrieve data:
-          ['activities_data']['background_activities']
-          ['activities_data']['fitness_activities']
+          ['activity_data']['background_activities']
+          ['activity_data']['fitness_activities']
           ['social_data']['fitness_activity_sharing']
           ['social_data']['friends']
           ['sleep_data']['sleep_logs']
@@ -179,9 +177,9 @@ def get_runkeeper_data(access_token, user_data):
 
     # Get activity data.
     fitness_activity_items = get_items(
-        access_token, user_data['fitness_activities'] + '?pageSize=1000')
+        access_token, user_data['fitness_activities'])
     background_activity_items = get_items(
-        access_token, user_data['background_activities'] + '?pageSize=1000')
+        access_token, user_data['background_activities'])
     # Fitness activities.
     for item in fitness_activity_items:
         item_data = runkeeper_query(
@@ -204,20 +202,20 @@ def get_runkeeper_data(access_token, user_data):
         activity_data['background_activities'][item['uri']] = item_bkgrnd_data
 
     # Get friend data.
-    friends_items = get_items(access_token, user_data['team'] + '?pageSize=1000')
+    friends_items = get_items(access_token, user_data['team'])
     for item in friends_items:
         item_data = runkeeper_query(access_token, item['url'])
         friends_social_data = data_for_keys(item_data, FRIENDS_SOCIAL_KEYS)
         social_data['friends'][item['url']] = friends_social_data
 
     # Get sleep data.
-    sleep_items = get_items(access_token, user_data['sleep'] + '?pageSize=1000')
+    sleep_items = get_items(access_token, user_data['sleep'])
     for item in sleep_items:
         item_data = runkeeper_query(access_token, item['uri'])
         sleep_log_data = data_for_keys(item_data, SLEEP_DATA_KEYS)
         sleep_data['sleep_logs'][item['uri']] = sleep_log_data
 
-    return {'activities_data': activity_data,
+    return {'activity_data': activity_data,
             'social_data': social_data,
             'sleep_data': sleep_data}
 
@@ -398,17 +396,17 @@ def create_runkeeper_ohdataset(access_token,
 
     identifier = 'individual-{}'.format(user_data['userID'])
     filename_activity = format_filename('RunKeeper', identifier,
-                                        'activities-data')
+                                        'activity-data')
     filename_social = format_filename('RunKeeper', identifier, 'social-data')
     filename_sleep = format_filename('RunKeeper', identifier, 'sleep-data')
     source = OHDataSource(name='RunKeeper Health Graph API',
                           url='http://developer.runkeeper.com/healthgraph')
 
     # Make activity data file if there's activity data.
-    if (runkeeper_data['activities_data']['background_activities'] or
-            runkeeper_data['activities_data']['fitness_activities']):
+    if (runkeeper_data['activity_data']['background_activities'] or
+            runkeeper_data['activity_data']['fitness_activities']):
         activity_dataset = make_activity_dataset(
-            data=runkeeper_data['activities_data'],
+            data=runkeeper_data['activity_data'],
             filename=filename_activity,
             source=source,
             **kwargs)
@@ -416,7 +414,7 @@ def create_runkeeper_ohdataset(access_token,
         activity_dataset.close()
         if update_url and task_id:
             activity_dataset.update(update_url, task_id,
-                                    subtype='activities-data')
+                                    subtype='activity-data')
 
     # Make social data file if there's social data.
     if (runkeeper_data['social_data']['fitness_activity_sharing'] or
