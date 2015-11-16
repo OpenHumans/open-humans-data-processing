@@ -262,7 +262,7 @@ class OHDataSet(object):
         file_out.close()
         filehandle.close()
 
-    def add_remote_file(self, url, file_meta=None):
+    def add_remote_file(self, url, filename=None, file_meta=None):
         """Fetch remote file, add to tempdir. Uncompress if gz or bz2.
 
         _Input_
@@ -271,10 +271,11 @@ class OHDataSet(object):
         assert self.mode in ['r+', 'a', 'w']
 
         # Parse url for filename information.
-        local_filename = url.split('/')[-1]
-        basename = re.search(r'(?P<basename>.*?)(|\.gz|\.bz2)$',
-                             local_filename).group('basename')
-        local_filepath = os.path.join(self.tempdir, basename)
+        orig_filename = url.split('/')[-1]
+        if not filename:
+            filename = re.search(r'(?P<basename>.*?)(|\.gz|\.bz2)$',
+                                 orig_filename).group('basename')
+        local_filepath = os.path.join(self.tempdir, filename)
 
         # Get the file.
         req = requests.get(url, stream=True)
@@ -287,9 +288,9 @@ class OHDataSet(object):
         tempf.flush()
 
         # Set up decompression if appropriate.
-        if local_filename.endswith('.gz'):
+        if orig_filename.endswith('.gz'):
             out = gzip.open(tempf.name, mode='r')
-        elif local_filename.endswith('.bz2'):
+        elif orig_filename.endswith('.bz2'):
             out = bz2.BZ2File(tempf.name, mode='r')
         else:
             tempf.seek(0)
@@ -297,10 +298,10 @@ class OHDataSet(object):
 
         # Update metadata.
         rettime = datetime.isoformat(datetime.utcnow().replace(microsecond=0))
-        self.metadata['files'][local_filename] = {'retrieved_from': url,
-                                                  'retrieval_time': rettime}
+        self.metadata['files'][filename] = {'retrieved_from': url,
+                                            'retrieval_time': rettime}
         if file_meta:
-            self.metadata['files'][local_filename].update(file_meta)
+            self.metadata['files'][filename].update(file_meta)
         # Copy uncompressed to file, clean up.
         file_out = open(local_filepath, 'wb')
         file_out.writelines(out)
