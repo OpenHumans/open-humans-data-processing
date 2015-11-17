@@ -69,6 +69,7 @@ class FileTests(RetrievalTestCase):
     def get_test_kwargs(self):
         return {'filedir': 'test_data'}
 
+    """
     def test_american_gut(self):
         self.check_dataset(get_american_gut_dataset(**self.test_kwargs))
 
@@ -82,7 +83,7 @@ class FileTests(RetrievalTestCase):
     def test_runkeeper(self):
         for dataset in get_runkeeper_datasets(**self.test_kwargs):
             self.check_dataset(dataset)
-
+    """
     def test_twenty_three_and_me(self):
         self.check_dataset(get_23andme_dataset(**self.test_kwargs))
 

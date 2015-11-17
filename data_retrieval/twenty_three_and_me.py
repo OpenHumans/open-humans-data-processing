@@ -201,14 +201,13 @@ def clean_raw_23andme(input_filepath):
     while next_line.startswith("#"):
         header_lines.append(next_line)
         next_line = inputfile.next()
-    if (len(header_lines) == len(expected_header) and
-        all([expected_header[i] == header_lines[i] for i in
-            range(len(expected_header))])):
-        for line in expected_header:
-            output.write(line)
-    else:
-        pass
+    if not (len(header_lines) == len(expected_header) and
+            all([expected_header[i] == header_lines[i] for i in
+                 range(len(expected_header))])):
         # TODO: Output warning about header change, but don't abort processing
+        pass
+    for line in expected_header:
+        output.write(line)
 
     while next_line:
         if re.match(r'(rs|i)[0-9]+\t[1-9XYM][0-9T]?\t[0-9]+\t[ACGT\-ID][ACGT\-ID]?', next_line):
