@@ -34,9 +34,6 @@ from .participant_data_set import format_filename, get_dataset, OHDataSource
 REF_23ANDME_FILE = os.path.join(
     os.path.dirname(__file__), '23andme', 'reference_b37.txt')
 
-API23ANDME_Y_REGIONS_JSON = os.path.join(
-    os.path.dirname(__file__), '23andme', 'y_chrom_regions.json')
-
 # Was used to generate reference genotypes in the previous file.
 REFERENCE_GENOME_URL = ('http://hgdownload-test.cse.ucsc.edu/' +
                         'goldenPath/hg19/bigZips/hg19.2bit')
