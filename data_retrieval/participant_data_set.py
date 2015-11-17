@@ -33,17 +33,17 @@ def now_string():
     return datetime.utcnow().strftime('%Y%m%dT%H%M%SZ')
 
 
-def format_filename(provider, identifier, data_type):
+def format_filename(source, data_type):
     """
-    Format filenames like:
+    Format filenames. Should match app names and data subtypes in main site.
 
-    23andme_individual-058e958a740ab412_full-genotype-data_20150304174829.tar.gz
-    american-gut_sample-000007080_microbiome-16s_20150304174829.tar.gz
-    go-viral_id-individual_sickness-reports_20150304174829.tar.gz
-    pgp-harvard_individual-hu43860C_genome_20150304174829.tar.gz
-    pgp-harvard_individual-hu43860C_surveys_20150304174829.tar.gz
+    Examples:
+      twenty-three-and-me_genotyping-data_20150304174829.tar.gz
+      american-gut_microbiome-16S-and-surveys_20150304174829.tar.gz
+      go-viral_sickness-and-viral-profiling_20150304174829.tar.gz
+      pgp_genome_20150304174829.tar.gz
     """
-    basename = '_'.join([provider, identifier, data_type, now_string()])
+    basename = '_'.join([source, data_type, now_string()])
     return basename + '.tar.gz'
 
 
@@ -353,8 +353,12 @@ class S3OHDataSet(OHDataSet):
 
         # Check S3 connection. Copy S3 to local temp file if reading.
         try:
+            print "Getting S3 connection..."
             s3 = s3_connection()
+            print s3
+            print "Getting bucket {}".format(self.s3_bucket_name)
             bucket = s3.get_bucket(self.s3_bucket_name)
+            print bucket
         except S3ResponseError as e:
             print 'Exception in opening the S3 bucket:', e
             raise ValueError('S3 bucket not found: ' + self.s3_bucket_name)

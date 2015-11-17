@@ -21,11 +21,11 @@ from werkzeug.contrib.fixers import ProxyFix
 
 from celery_worker import make_worker
 
-from data_retrieval.american_gut import create_amgut_ohdatasets
+from data_retrieval.american_gut import create_amgut_ohdataset
 from data_retrieval.pgp_harvard import create_pgpharvard_ohdatasets
 from data_retrieval.twenty_three_and_me import create_23andme_ohdataset
 from data_retrieval.go_viral import create_go_viral_ohdataset
-from data_retrieval.runkeeper import create_runkeeper_ohdataset
+from data_retrieval.runkeeper import create_runkeeper_ohdatasets
 
 app = Flask(__name__)
 
@@ -155,9 +155,10 @@ def task_postrun_handler_cb(sender=None, state=None, kwargs=None,
 @celery_worker.task
 def make_23andme_ohdataset(**task_params):
     """
-    Task to initiate retrieval of 23andMe data set
+    Task to initiate retrieval of 23andMe data set.
     """
-    create_23andme_ohdataset(**task_params)
+    file_url = task_params.pop('file_url')
+    create_23andme_ohdataset(file_url=file_url, **task_params)
 
 
 @celery_worker.task
@@ -171,7 +172,7 @@ def make_amgut_ohdataset(**task_params):
     """
     data = task_params.pop('data')
     if 'surveyIds' in data:
-        create_amgut_ohdatasets(survey_ids=data['surveyIds'], **task_params)
+        create_amgut_ohdataset(survey_ids=data['surveyIds'], **task_params)
 
 
 @celery_worker.task
@@ -195,7 +196,7 @@ def make_runkeeper_ohdataset(**task_params):
     """
     Task to initiate retrieval of RunKeeper data set
     """
-    create_runkeeper_ohdataset(**task_params)
+    create_runkeeper_ohdatasets(**task_params)
 
 
 # Pages to receive task requests
@@ -205,8 +206,7 @@ def twenty_three_and_me():
     Page to receive 23andme task request
 
     'task_params' specific to this task:
-        'profile_id' (string identifying the 23andme profile)
-        'access_token' (string, token for accessing the data via 23andme API)
+        'file_url' (string, for accessing the uploaded file)
     """
     task_params = json.loads(request.args['task_params'])
     make_23andme_ohdataset.delay(**task_params)
@@ -219,7 +219,7 @@ def american_gut():
     Page to receive American Gut task request
 
     'task_params' specific to this task:
-        'surveyIds' (array of strings with American Gut survey IDs)
+        'data' (JSON format, must contain 'surveyIDs')
     """
     task_params = json.loads(request.args['task_params'])
     make_amgut_ohdataset.delay(**task_params)

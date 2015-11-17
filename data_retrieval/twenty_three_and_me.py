@@ -17,9 +17,11 @@ import bz2
 import gzip
 import os
 import re
+import requests
 import shutil
 import sys
 import tempfile
+from urlparse import urlparse
 import zipfile
 
 from cStringIO import StringIO
@@ -225,10 +227,8 @@ def clean_raw_23andme(input_filepath):
     return output
 
 
-def create_23andme_ohdataset(user_id,
-                             input_file=None,
-                             input_s3_bucket=None,
-                             input_s3_key=None,
+def create_23andme_ohdataset(input_file=None,
+                             file_url=None,
                              task_id=None,
                              update_url=None,
                              **kwargs):
@@ -240,8 +240,7 @@ def create_23andme_ohdataset(user_id,
 
     Optional arguments:
         input_file: path to a local copy of the uploaded file
-        input_s3_bucket: S3 bucket containing the uploaded file
-        input_s3_key: S3 key that is a copy of the uploaded file
+        file_url: path to an online copy of the input file
         filedir: Local filepath, folder in which to place the resulting file.
         s3_bucket_name: S3 bucket to write resulting file.
         s3_key_dir: S3 key "directory" to write resulting file. The full S3 key
@@ -253,22 +252,23 @@ def create_23andme_ohdataset(user_id,
     Either 'filedir' (and no S3 arguments), or both s3_bucket_name and
     s3_key_dir (and no 'filedir') must be specified.
     """
-    identifier = 'userid-{}'.format(user_id)
-    filename = format_filename('23andme', identifier, 'full-genotype-data')
+    filename = format_filename(source='twenty-three-and-me',
+                               data_type='genotyping')
 
-    if input_s3_bucket and input_s3_key and not input_file:
+    if file_url and not input_file:
         # Create a local temp directory to work with this file, copy file to it.
         tempdir = tempfile.mkdtemp()
-        s3 = s3_connection()
-        bucket = s3.get_bucket(input_s3_bucket)
-        key = bucket.get_key(input_s3_key)
-        basename = os.path.basename(input_s3_key)
+        r = requests.get(file_url, stream=True)
+        req_url = r.url
+        basename = os.path.basename(urlparse(req_url).path)
         input_file = os.path.join(tempdir, basename)
-        key.get_contents_to_filename(input_file)
-    elif input_file and not input_s3_bucket and not input_s3_key:
+        with open(input_file, 'wb') as fd:
+            for chunk in r.iter_content(chunk_size=1024):
+                fd.write(chunk)
+    elif input_file and not file_url:
         pass
     else:
-        raise "Run with either input_file, or input_s3_bucket and input_s3_key"
+        raise "Run with either input_file, or file_url"
 
     raw_23andme = clean_raw_23andme(input_file)
     raw_23andme.seek(0)
@@ -278,7 +278,7 @@ def create_23andme_ohdataset(user_id,
     vcf_23andme.seek(0)
 
     # Set up output data set file.
-    source = OHDataSource(name='23andme User Download',
+    source = OHDataSource(name='23andMe User Download',
                           url='https://www.23andme.com/you/download/')
     dataset = get_dataset(filename, source, **kwargs)
 
@@ -286,7 +286,7 @@ def create_23andme_ohdataset(user_id,
     dataset.add_file(file=vcf_23andme, name='23andme-full-genotyping.vcf')
     dataset.close()
 
-    if input_s3_bucket and input_s3_key:
+    if file_url:
         os.remove(input_file)
         shutil.rmtree(tempdir)
 
@@ -297,13 +297,11 @@ def create_23andme_ohdataset(user_id,
 
 
 if __name__ == '__main__':
-    if len(sys.argv) != 5:
-        print 'Please specify an S3 bucket and key, and target local directory.'
-
+    if len(sys.argv) != 3:
+        print 'Please specify a remote file URL, and target local directory.'
         sys.exit(1)
 
-    create_23andme_ohdataset(input_s3_bucket=sys.argv[1], input_s3_key=sys.argv[2],
-                             user_id=sys.argv[3], filedir=sys.argv[4])
+    create_23andme_ohdataset(file_url=sys.argv[1], filedir=sys.argv[2])
 
     # Version used to test creating dataset from a local file...
     #

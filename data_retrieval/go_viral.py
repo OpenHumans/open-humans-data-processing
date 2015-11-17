@@ -15,7 +15,7 @@ import requests
 
 from .participant_data_set import format_filename, get_dataset, OHDataSource
 
-GO_VIRAL_DATA_URL = 'http://www.goviralstudy.com/participants/{}/data'
+GO_VIRAL_DATA_URL = 'https://www.goviralstudy.com/participants/{}/data'
 
 
 def get_go_viral_data(access_token, go_viral_id):
@@ -25,6 +25,7 @@ def get_go_viral_data(access_token, go_viral_id):
     request = requests.get(GO_VIRAL_DATA_URL.format(go_viral_id), params={
         'access_token': access_token
     })
+    print request.status_code
 
     return request.json()
 
@@ -48,16 +49,16 @@ def create_go_viral_ohdataset(access_token, go_viral_id,
     Either 'filedir' (and no S3 arguments), or both S3 arguments (and no
     'filedir') must be specified.
     """
-    identifier = go_viral_id.replace('simplelogin:', 'individual-')
-    filename = format_filename('go-viral', identifier, 'sickness-reports')
+    filename = format_filename(source='go-viral',
+                               data_type='sickness-and-viral-profiling')
 
     source = OHDataSource(name='GoViral Integration API',
-                          url='http://www.goviralstudy.com/')
+                          url='http://www.goviralstudy.com/',
+                          userID=go_viral_id)
 
     dataset = get_dataset(filename, source, **kwargs)
 
     print 'Fetching GoViral data.'
-
     data_go_viral = get_go_viral_data(access_token, go_viral_id)
 
     # Don't create a file if there's no data from GoViral
@@ -68,10 +69,9 @@ def create_go_viral_ohdataset(access_token, go_viral_id,
                      name='go-viral.json')
     dataset.metadata['goviral_id'] = go_viral_id
     dataset.close()
-
-    dataset.update(update_url, task_id)
-
-    return dataset
+    if update_url and task_id:
+        dataset.update(update_url, task_id,
+                       subtype='sickness-and-viral-profiling')
 
 
 if __name__ == '__main__':
