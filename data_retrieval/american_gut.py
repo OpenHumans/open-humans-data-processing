@@ -173,82 +173,16 @@ def dict_list_as_tsv(list_of_dicts):
                             x in header]) + '\n'
     return output
 
-def create_amgut_ohdataset(survey_id,
-                           source,
+
+def create_amgut_ohdataset(survey_ids,
                            task_id=None,
                            update_url=None,
                            **kwargs):
     """
-    Create a dataset from an American Gut barcode.
-    """
-    # For mapping survey IDs to sample accessions.
-    with open(SURVEYID_TO_SAMPACC_FILE) as filedata:
-        surveyid_to_sampacc = json.loads(''.join(filedata.readlines()))
-    if survey_id not in surveyid_to_sampacc:
-        # If we can't match the survey ID to sample accession, the data isn't
-        # yet available in EBI. This situation might arise if the sample hasn't
-        # been analyzed yet (but American Gut is still offering the barcode to
-        # Open Humans). Conclusion by OH should be "Data not available."
-        return
-
-    # Set up for constructing the OH dataset file.
-    identifier = 'surveyid-{}'.format(survey_id)
-    filename = format_filename('american-gut', identifier, 'microbiome-16S')
-    dataset = get_dataset(filename, source, **kwargs)
-
-    for sampleacc in surveyid_to_sampacc[survey_id]:
-        # Get EBI information. Describes EBI repository items and accessions.
-        ebi_information, url = get_ebi_info_set(accession=sampleacc)
-        ebi_information_tsv = StringIO(dict_list_as_tsv(ebi_information))
-        dataset.add_file(
-            file=ebi_information_tsv,
-            name='ebi_information_sample={}.tsv'.format(sampleacc),
-            file_meta={'derived_from': url})
-        ebi_information_json = StringIO(
-            json.dumps(ebi_information, indent=2, sort_keys=True) + '\n')
-        dataset.add_file(
-            file=ebi_information_json,
-            name='ebi_information_sample={}.json'.format(sampleacc),
-            file_meta={'derived_from': url})
-
-        # Get and store metadata. Contains survey data.
-        ebi_metadata, url = fetch_metadata_xml(accession=sampleacc)
-        ebi_metadata_tsv = StringIO(dict_list_as_tsv([ebi_metadata]))
-        dataset.add_file(file=ebi_metadata_tsv,
-                         name='ebi_metadata_sample-{}.tsv'.format(sampleacc),
-                         file_meta={'derived_from': url})
-        ebi_metadata_json = StringIO(json.dumps(ebi_metadata, indent=2,
-                                                sort_keys=True) + '\n')
-        dataset.add_file(file=ebi_metadata_json,
-                         name='ebi_metadata_sample-{}.json'.format(sampleacc),
-                         file_meta={'derived_from': url})
-
-        # Process to get individual read files.
-        # A sample can have more than one read file if it has more than one
-        # run, e.g. if the first run had unsatisfactory quality.
-        for ebi_info_item in ebi_information:
-            fastq_url = 'http://' + ebi_info_item['fastq_ftp']
-            dataset.add_remote_file(
-                url=fastq_url,
-                filename='reads_sample-{}_run-{}.fastq'.format(
-                    sampleacc, ebi_info_item['run_accession']))
-
-    dataset.close()
-
-    dataset.update(update_url, task_id)
-
-    return dataset
-
-
-def create_amgut_ohdatasets(survey_ids,
-                            task_id=None,
-                            update_url=None,
-                            **kwargs):
-    """
-    Create Open Humans data sets from an American Gut sample barcode.
+    Create a dataset from a set of American Gut survey IDs.
 
     Required arguments:
-        barcodes: List of EBI sample barcode
+        survey_ids: List of survey IDs
         filepath OR (s3_bucket_name and s3_key_name): (see below)
 
     Optional arguments:
@@ -260,20 +194,75 @@ def create_amgut_ohdatasets(survey_ids,
     Either 'filedir' (and no S3 arguments), or both S3 arguments (and no
     'filedir') must be specified.
     """
+    # For mapping survey IDs to sample accessions.
+    with open(SURVEYID_TO_SAMPACC_FILE) as filedata:
+        surveyid_to_sampacc = json.loads(''.join(filedata.readlines()))
+
+    # Set up for constructing the OH dataset file.
     source = OHDataSource(name='American Gut',
-                          url='https://microbio.me/americangut/')
+                          url='https://microbio.me/americangut/',
+                          survey_ids=survey_ids)
+    filename = format_filename(source='american-gut',
+                               data_type='microbiome-16S')
+    dataset = get_dataset(filename, source, **kwargs)
 
-    return [
-        create_amgut_ohdataset(
-            survey_id, source, task_id, update_url, **kwargs)
-        for survey_id in survey_ids
-    ]
+    for survey_id in survey_ids:
+        if survey_id not in surveyid_to_sampacc:
+            # If we can't match the survey ID to sample accession, the data
+            # isn't yet available in EBI. This situation might arise if the
+            # sample hasn't been analyzed yet (but American Gut is still
+            # offering the barcode to Open Humans). Conclusion by OH should be
+            # "Data not available."
+            # TODO: Raise alert on Sentry.
+            return
 
+        for sampleacc in surveyid_to_sampacc[survey_id]:
+            # Get EBI information. Describes repository items and accessions.
+            ebi_information, url = get_ebi_info_set(accession=sampleacc)
+            ebi_information_tsv = StringIO(dict_list_as_tsv(ebi_information))
+            dataset.add_file(
+                file=ebi_information_tsv,
+                name='ebi_information_sample={}.tsv'.format(sampleacc),
+                file_meta={'derived_from': url})
+            ebi_information_json = StringIO(
+                json.dumps(ebi_information, indent=2, sort_keys=True) + '\n')
+            dataset.add_file(
+                file=ebi_information_json,
+                name='ebi_information_sample={}.json'.format(sampleacc),
+                file_meta={'derived_from': url})
+
+            # Get and store metadata. Contains survey data.
+            ebi_metadata, url = fetch_metadata_xml(accession=sampleacc)
+            ebi_metadata_tsv = StringIO(dict_list_as_tsv([ebi_metadata]))
+            dataset.add_file(file=ebi_metadata_tsv,
+                             name='ebi_metadata_sample-{}.tsv'.format(sampleacc),
+                             file_meta={'derived_from': url})
+            ebi_metadata_json = StringIO(json.dumps(ebi_metadata, indent=2,
+                                                    sort_keys=True) + '\n')
+            dataset.add_file(file=ebi_metadata_json,
+                             name='ebi_metadata_sample-{}.json'.format(sampleacc),
+                             file_meta={'derived_from': url})
+
+            # Process to get individual read files.
+            # A sample can have more than one read file if it has more than one
+            # run, e.g. if the first run had unsatisfactory quality.
+            for ebi_info_item in ebi_information:
+                fastq_url = 'http://' + ebi_info_item['fastq_ftp']
+                dataset.add_remote_file(
+                    url=fastq_url,
+                    filename='reads_sample-{}_run-{}.fastq'.format(
+                        sampleacc, ebi_info_item['run_accession']))
+
+    dataset.close()
+    if update_url and task_id:
+        dataset.update(update_url, task_id,
+                       subtype='microbiome-16S-and-surveys')
+
+    return dataset
 
 if __name__ == '__main__':
     if len(sys.argv) != 3:
-        print 'Please specify a barcode and directory.'
-
+        print 'Please specify a survey ID and directory.'
         sys.exit(1)
 
-    create_amgut_ohdatasets(survey_ids=[sys.argv[1]], filedir=sys.argv[2])
+    create_amgut_ohdataset(survey_ids=[sys.argv[1]], filedir=sys.argv[2])

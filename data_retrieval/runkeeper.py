@@ -372,10 +372,10 @@ def make_sleep_dataset(data, filename, source, **kwargs):
     return dataset
 
 
-def create_runkeeper_ohdataset(access_token,
-                               task_id=None,
-                               update_url=None,
-                               **kwargs):
+def create_runkeeper_ohdatasets(access_token,
+                                task_id=None,
+                                update_url=None,
+                                **kwargs):
     """
     Create Open Humans Dataset from RunKeeper API data
 
@@ -394,13 +394,17 @@ def create_runkeeper_ohdataset(access_token,
     user_data = runkeeper_query(access_token, '/user')
     runkeeper_data = get_runkeeper_data(access_token, user_data)
 
-    identifier = 'individual-{}'.format(user_data['userID'])
-    filename_activity = format_filename('RunKeeper', identifier,
-                                        'activity-data')
-    filename_social = format_filename('RunKeeper', identifier, 'social-data')
-    filename_sleep = format_filename('RunKeeper', identifier, 'sleep-data')
+    filename_activity = format_filename(source='runkeeper',
+                                        data_type='activity-data')
+    filename_social = format_filename(source='runkeeper',
+                                      data_type='social-data')
+    filename_sleep = format_filename(source='runkeeper',
+                                     data_type='sleep-data')
     source = OHDataSource(name='RunKeeper Health Graph API',
-                          url='http://developer.runkeeper.com/healthgraph')
+                          url='http://developer.runkeeper.com/healthgraph',
+                          userID=user_data['userID'])
+
+    datasets = []
 
     # Make activity data file if there's activity data.
     if (runkeeper_data['activity_data']['background_activities'] or
@@ -415,6 +419,7 @@ def create_runkeeper_ohdataset(access_token,
         if update_url and task_id:
             activity_dataset.update(update_url, task_id,
                                     subtype='activity-data')
+        datasets.append(activity_dataset)
 
     # Make social data file if there's social data.
     if (runkeeper_data['social_data']['fitness_activity_sharing'] or
@@ -428,6 +433,7 @@ def create_runkeeper_ohdataset(access_token,
         social_dataset.close()
         if update_url and task_id:
             social_dataset.update(update_url, task_id, subtype='social-data')
+        datasets.append(social_dataset)
 
     # Make sleep data file if there's sleep log data.
     if runkeeper_data['sleep_data']['sleep_logs']:
@@ -440,6 +446,9 @@ def create_runkeeper_ohdataset(access_token,
         sleep_dataset.close()
         if update_url and task_id:
             sleep_dataset.update(update_url, task_id, subtype='sleep-data')
+        datasets.append(sleep_dataset)
+
+    return datasets
 
 
 if __name__ == '__main__':
@@ -447,4 +456,4 @@ if __name__ == '__main__':
         print 'Please specify a token and directory.'
         sys.exit(1)
 
-    create_runkeeper_ohdataset(*sys.argv[1:-1], filedir=sys.argv[-1])
+    create_runkeeper_ohdatasets(*sys.argv[1:-1], filedir=sys.argv[-1])

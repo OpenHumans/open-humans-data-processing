@@ -11,7 +11,7 @@ For local development, running this app with `foreman` is strongly recommended,
 as well as a `\.env` file containing environment variable values (see
 `env.example`).
 
-###Notes on S3 Bucket Permissions
+### Notes on S3 Bucket Permissions
 
 Putting these here for future reference, for understanding best practices in
 using S3 storage.
@@ -27,3 +27,12 @@ exist.
 * S3 permission policies must be split according to bucket-level permissions
 (using an ARN like `arn:aws:s3:::my-bucket-name`) and object-level permissions
 (using an ARN like `arn:aws:s3:::my-bucket-name/*`).
+
+
+### Testing
+
+***(Note: this takes a long time to run, and some tests demand nontrivial
+  resources from other sites/repositories/etc. We should consider splitting
+  up the tests, only running tests on updated aspects.)***
+
+Tests can be run using nosetests, e.g. `nosetests data_retrieval/tests.py`.

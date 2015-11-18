@@ -7,21 +7,26 @@
 amqp==1.4.7               # via kombu
 anyjson==0.3.3            # via kombu
 beautifulsoup4==4.4.1
-billiard==3.3.0.20        # via celery
+billiard==3.3.0.21        # via celery
 blinker==1.4
 boto==2.38.0
 celery==3.1.18
+click==5.1                # via pip-tools
+first==2.0.1              # via pip-tools
 Flask-SSLify==0.1.5
 Flask==0.10.1
 gevent==1.0.2
 greenlet==0.4.9           # via gevent
 itsdangerous==0.24        # via flask
 jinja2==2.8               # via flask
-kombu==3.0.28             # via celery
+kombu==3.0.29             # via celery
+lxml==3.5.0
 markupsafe==0.23          # via jinja2
 nose==1.3.7
-pytz==2015.6              # via celery
+pip-tools==1.1.6
+pytz==2015.7              # via celery
 raven==5.7.2
 requests==2.8.1
+six==1.10.0               # via pip-tools
 uWSGI==2.0.11.2
 werkzeug==0.10.4

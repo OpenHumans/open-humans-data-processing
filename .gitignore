@@ -3,3 +3,8 @@
 
 # Local environment, used by Foreman
 .env
+
+# Scratch directories
+files/*
+scratch/*
+test_data/*

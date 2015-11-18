@@ -187,61 +187,47 @@ def create_pgpharvard_ohdatasets(huID,
     Either 'filedir' (and no S3 arguments), or both S3 arguments (and no
     'filedir') must be specified.
     """
+    print kwargs
     source = OHDataSource(name='Harvard Personal Genome Project',
-                          url='{}/profile/{}'.format(BASE_URL, huID))
+                          url='{}/profile/{}'.format(BASE_URL, huID),
+                          huID=huID)
 
-    identifier = 'individual-{}'.format(huID)
-
-    filename_genome = format_filename('pgp-harvard', identifier, 'genome')
-    filename_surveys = format_filename('pgp-harvard', identifier, 'surveys')
+    filename_genome = format_filename(source='pgp', data_type='genome')
+    filename_surveys = format_filename(source='pgp', data_type='surveys')
 
     print 'Parsing profile...'
-
     genome_links, survey_data = parse_pgp_profile_page(huID)
 
     datasets = []
 
     if survey_data:
         print 'Gathering survey data...'
-
         dataset = get_dataset(filename_surveys, source, **kwargs)
-
         survey_data = StringIO(json.dumps(survey_data, indent=2,
                                           sort_keys=True) + '\n')
-
         dataset.add_file(
             file=survey_data,
             name=('PGPHarvard-%s-surveys-%s.json' %
                   (huID, datetime.now().strftime('%Y%m%d%H%M%S'))))
-
+        dataset.close()
+        if update_url and task_id:
+            dataset.update(update_url, task_id, subtype='surveys')
         datasets.append(dataset)
 
     if genome_links:
         print 'Gathering genome data...'
-
         dataset = get_dataset(filename_genome, source, **kwargs)
-
         for item in genome_links:
             link = item['link']
-
-            print 'Retrieving', link
-
+            print 'Retrieving {}'.format(link)
             dataset.add_remote_file(url=link,
                                     file_meta={'file_type': item['info']})
-
+        dataset.close()
+        if update_url and task_id:
+            dataset.update(update_url, task_id, subtype='genome')
         datasets.append(dataset)
 
-    for dataset in datasets:
-        dataset.metadata['pgp_harvard_id'] = huID
-
-        print 'Closing dataset'
-        dataset.close()
-
-        print 'Updating dataset'
-        dataset.update(update_url, task_id)
-
     print 'Finished with all datasets'
-
     return datasets
 
 
