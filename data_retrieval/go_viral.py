@@ -53,7 +53,7 @@ def create_go_viral_ohdataset(access_token, go_viral_id,
                                data_type='sickness-and-viral-profiling')
 
     source = OHDataSource(name='GoViral Integration API',
-                          url='http://www.goviralstudy.com/',
+                          url='https://www.goviralstudy.com/',
                           userID=go_viral_id)
 
     dataset = get_dataset(filename, source, **kwargs)
