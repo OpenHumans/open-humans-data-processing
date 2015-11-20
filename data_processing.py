@@ -158,7 +158,7 @@ def make_23andme_ohdataset(**task_params):
     Task to initiate retrieval of 23andMe data set.
     """
     file_url = task_params.pop('file_url')
-    create_23andme_ohdataset(file_url=file_url, **task_params)
+    create_23andme_ohdataset(file_url=file_url, sentry=sentry, **task_params)
 
 
 @celery_worker.task

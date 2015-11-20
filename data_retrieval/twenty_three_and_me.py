@@ -85,7 +85,7 @@ def vcf_from_raw_23andme(raw_23andme):
     header = vcf_header(
         source='open_humans_data_processing.twenty_three_and_me',
         reference=REFERENCE_GENOME_URL,
-        format_info = ['<ID=GT,Number=1,Type=String,Description="Genotype">']
+        format_info=['<ID=GT,Number=1,Type=String,Description="Genotype">']
     )
     for line in header:
         output.write(line + '\n')
@@ -137,7 +137,7 @@ def vcf_from_raw_23andme(raw_23andme):
     return output
 
 
-def clean_raw_23andme(input_filepath):
+def clean_raw_23andme(input_filepath, sentry=None):
     """
     Create clean file in 23andme format from downloaded version
 
@@ -146,7 +146,7 @@ def clean_raw_23andme(input_filepath):
     """
     error_message = ("Input file is expected to be either '.txt', '.txt.gz', "
                      "'.txt.bz2', or a single '.txt' file in a '.zip' ZIP "
-                     "archive.")
+                     'archive.')
     if input_filepath.endswith('.zip'):
         zip23andme = zipfile.ZipFile(input_filepath)
         zipfilelist = zip23andme.namelist()
@@ -198,27 +198,31 @@ def clean_raw_23andme(input_filepath):
         ]
     next_line = inputfile.next()
     header_lines = []
-    while next_line.startswith("#"):
+    while next_line.startswith('#'):
         header_lines.append(next_line)
         next_line = inputfile.next()
     if not (len(header_lines) == len(expected_header) and
             all([expected_header[i] == header_lines[i] for i in
                  range(len(expected_header))])):
-        # TODO: Output warning about header change, but don't abort processing
-        pass
+        if sentry:
+            sentry.captureMessage('23andMe header did not conform to expected format')
     for line in expected_header:
         output.write(line)
+
+    bad_format = False
 
     while next_line:
         if re.match(r'(rs|i)[0-9]+\t[1-9XYM][0-9T]?\t[0-9]+\t[ACGT\-ID][ACGT\-ID]?', next_line):
             output.write(next_line)
         else:
-            pass
-            # TODO: Output warning about unrecognized line format, don't abort
+            bad_format = True
         try:
             next_line = inputfile.next()
         except StopIteration:
             next_line = None
+
+    if bad_format and sentry:
+        sentry.captureMessage('23andMe body did not conform to expected format')
 
     return output
 
@@ -227,6 +231,7 @@ def create_23andme_ohdataset(input_file=None,
                              file_url=None,
                              task_id=None,
                              update_url=None,
+                             sentry=None,
                              **kwargs):
     """Create Open Humans Dataset from uploaded 23andme full genotyping data
 
@@ -252,7 +257,7 @@ def create_23andme_ohdataset(input_file=None,
                                data_type='genotyping')
 
     if file_url and not input_file:
-        # Create a local temp directory to work with this file, copy file to it.
+        # Create a local temp dir to work with this file, copy file to it.
         tempdir = tempfile.mkdtemp()
         r = requests.get(file_url, stream=True)
         req_url = r.url
@@ -264,9 +269,9 @@ def create_23andme_ohdataset(input_file=None,
     elif input_file and not file_url:
         pass
     else:
-        raise "Run with either input_file, or file_url"
+        raise 'Run with either input_file, or file_url'
 
-    raw_23andme = clean_raw_23andme(input_file)
+    raw_23andme = clean_raw_23andme(input_file, sentry)
     raw_23andme.seek(0)
 
     vcf_23andme = vcf_from_raw_23andme(raw_23andme)
@@ -298,8 +303,3 @@ if __name__ == '__main__':
         sys.exit(1)
 
     create_23andme_ohdataset(file_url=sys.argv[1], filedir=sys.argv[2])
-
-    # Version used to test creating dataset from a local file...
-    #
-    # create_23andme_ohdataset(input_file=sys.argv[1],
-    #                          user_id=sys.argv[2], filedir=sys.argv[3])
