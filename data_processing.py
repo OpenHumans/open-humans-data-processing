@@ -26,6 +26,7 @@ from data_retrieval.pgp_harvard import create_pgpharvard_ohdatasets
 from data_retrieval.twenty_three_and_me import create_23andme_ohdataset
 from data_retrieval.go_viral import create_go_viral_ohdataset
 from data_retrieval.runkeeper import create_runkeeper_ohdatasets
+from data_retrieval.wildlife import create_wildlife_ohdataset
 
 app = Flask(__name__)
 
@@ -199,6 +200,20 @@ def make_runkeeper_ohdataset(**task_params):
     create_runkeeper_ohdatasets(**task_params)
 
 
+@celery_worker.task
+def make_wildlife_ohdataset(**task_params):
+    """
+    Task to initiate retrieval of American Gut data set.
+
+    Data retrieval is based on the survey IDs, which American Gut pushes
+    to Open Humans as an object in the generic 'data' field, e.g.:
+    { 'surveyIds': [ '614a55f251eb12ec' ] }
+    """
+    data = task_params.pop('data')
+    if 'files' in data:
+        create_wildlife_ohdataset(files=data['files'], **task_params)
+
+
 # Pages to receive task requests
 @app.route('/twenty_three_and_me', methods=['GET', 'POST'])
 def twenty_three_and_me():
@@ -263,6 +278,19 @@ def runkeeper():
     task_params = json.loads(request.args['task_params'])
     make_runkeeper_ohdataset.delay(**task_params)
     return 'RunKeeper dataset started'
+
+
+@app.route('/wildlife', methods=['GET', 'POST'])
+def wildlife():
+    """
+    Page to receive Wild Life of Our Homes task request
+
+    'task_params' specific to this task:
+        'data' (JSON format, expected to contain 'files')
+    """
+    task_params = json.loads(request.args['task_params'])
+    make_wildlife_ohdataset.delay(**task_params)
+    return 'Wildlife dataset started'
 
 
 @app.route('/', methods=['GET', 'POST'])

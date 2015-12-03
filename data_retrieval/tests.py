@@ -15,6 +15,7 @@ from .go_viral import create_go_viral_ohdataset
 from .pgp_harvard import create_pgpharvard_ohdatasets
 from .runkeeper import create_runkeeper_ohdatasets
 from .twenty_three_and_me import create_23andme_ohdataset
+from .wildlife import create_wildlife_ohdataset
 
 apply_env(get_env())
 
@@ -51,8 +52,18 @@ def get_go_viral_dataset(**kwargs):
     return create_go_viral_ohdataset(token, go_viral_id, **kwargs)
 
 
+def get_wildlife_dataset(**kwargs):
+    test_homedata_file = os.getenv('WILDLIFE_TESTFILE_HOMEDATA_URL')
+    test_bacteria_file = os.getenv('WILDLIFE_TESTFILE_BACTERIADATA_URL')
+    if test_homedata_file and test_bacteria_file:
+        files = {'home_data.json': test_homedata_file,
+                 'bacteria.csv.bz2': test_bacteria_file}
+    return create_wildlife_ohdataset(files, **kwargs)
+
+
 class RetrievalTestCase(TestCase):
     def check_dataset(self, dataset):
+        print dataset.filepath
         self.assertIsNotNone(dataset.filepath)
         self.assertIsNotNone(dataset.metadata)
         self.assertIsNotNone(dataset.source)
@@ -83,9 +94,12 @@ class FileTests(RetrievalTestCase):
     def test_runkeeper(self):
         for dataset in get_runkeeper_datasets(**self.test_kwargs):
             self.check_dataset(dataset)
-    """
+
     def test_twenty_three_and_me(self):
         self.check_dataset(get_23andme_dataset(**self.test_kwargs))
+    """
+    def test_wildlife(self):
+        self.check_dataset(get_wildlife_dataset(**self.test_kwargs))
 
 
 class S3Tests(FileTests):
