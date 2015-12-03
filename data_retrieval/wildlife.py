@@ -40,9 +40,11 @@ def create_wildlife_ohdataset(files,
 
     for filename in files:
         url = files[filename]
+        new_filename = filename[:-4] if filename.endswith('.bz2') else filename
+        new_filename = new_filename[:-3] if new_filename.endswith('.gz') else new_filename
         dataset.add_remote_file(
             url=url,
-            filename=filename)
+            filename=new_filename)
 
     dataset.close()
     if update_url and task_id:

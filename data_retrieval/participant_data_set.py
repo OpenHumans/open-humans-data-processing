@@ -9,6 +9,7 @@ import os
 import shutil
 import tarfile
 import tempfile
+import urlparse
 
 from datetime import datetime
 
@@ -271,7 +272,7 @@ class OHDataSet(object):
         assert self.mode in ['r+', 'a', 'w']
 
         # Parse url for filename information.
-        orig_filename = url.split('/')[-1]
+        orig_filename = urlparse.urlsplit(url)[2].split('/')[-1]
         if not filename:
             filename = re.search(r'(?P<basename>.*?)(|\.gz|\.bz2)$',
                                  orig_filename).group('basename')
