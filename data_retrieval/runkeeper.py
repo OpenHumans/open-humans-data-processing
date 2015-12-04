@@ -90,10 +90,10 @@ def get_items(access_token, path, recurse='both'):
         items = items + next_items
     if recurse == 'both':
         # Assert we have correct size.
-        if not (len(items) == query_data['size']):
-            error_msg = ("Activity items for retrieved for {} ({}) doesn't " +
-                         "match expected array size ({})").format(
-                path, len(items), query_data['size'])
+        if len(items) != query_data['size']:
+            error_msg = ("Activity items for retrieved for {} ({}) doesn't "
+                         'match expected array size ({})').format(
+                             path, len(items), query_data['size'])
             raise AssertionError(error_msg)
     return items
 
