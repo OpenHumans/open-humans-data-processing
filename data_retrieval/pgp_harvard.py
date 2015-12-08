@@ -161,7 +161,7 @@ def parse_pgp_profile_page(huID):
     profile_page = requests.get(url)
     assert profile_page.status_code == 200
 
-    profile_soup = BeautifulSoup(profile_page.text)
+    profile_soup = BeautifulSoup(profile_page.text, 'lxml')
     genome_file_links = parse_uploaded_div(profile_soup)
     surveys = parse_survey_div(profile_soup)
 
