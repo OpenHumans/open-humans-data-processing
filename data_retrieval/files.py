@@ -1,14 +1,20 @@
-import bz2
-import gzip
+from datetime import datetime
 import os
 import re
 import shutil
-import tempfile
 import urlparse
 
-from boto.exception import S3ResponseError
 from boto.s3.connection import S3Connection
 import requests
+
+
+def now_string():
+    """
+    Return the current date and time in a format suitable for a filename.
+
+    This is ISO 8601 without the optional date dashes and time colons.
+    """
+    return datetime.utcnow().strftime('%Y%m%dT%H%M%SZ')
 
 
 def s3_connection():

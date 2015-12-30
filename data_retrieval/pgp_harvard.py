@@ -10,11 +10,13 @@ May be used on the command line from this project's base directory, e.g.
 
    python -m data_retrieval.pgp_harvard hu43860C files
 
-...will assemble data sets for the ID "hu43860C" at:
+...assembles data sets for the ID "hu43860C" in the "files" directory, e.g.:
 
-   files/PGP-Harvard-surveys-hu43860C.json
-   files/PGP-Harvard-var-hu43860C.tsv.bz2
-   files/PGP-Harvard-var-hu43860C.vcf.bz2
+   files/PGP-Harvard-surveys-hu43860C-20160102T030405Z.json
+   files/PGP-Harvard-var-hu43860C-20160102T030405Z.tsv.bz2
+   files/PGP-Harvard-var-hu43860C-20160102T030405Z.vcf.bz2
+
+(These filenames includes a datetime stamp, January 2rd 2016 3:04:05am UTC.)
 """
 import json
 import os
@@ -28,7 +30,7 @@ import requests
 
 from bs4 import BeautifulSoup
 
-from .files import get_remote_file, mv_tempfile_to_output
+from .files import get_remote_file, mv_tempfile_to_output, now_string
 
 BASE_URL = 'https://my.pgp-hms.org'
 
@@ -183,7 +185,7 @@ def vcf_from_var(vcf_filename, tempdir, var_filepath):
 def handle_var_file(filename, tempdir, huID):
     data_files = []
     var_description = 'PGP Harvard genome, Complete Genomics var file format.'
-    new_filename = 'PGP-Harvard-var-{}.tsv.bz2'.format(huID)
+    new_filename = 'PGP-Harvard-var-{}-{}.tsv.bz2'.format(huID, now_string())
     new_filepath = os.path.join(tempdir, new_filename)
     shutil.move(os.path.join(tempdir, filename), new_filepath)
     data_files.append({
@@ -203,7 +205,7 @@ def handle_mastervarbeta_file(filename, tempdir, huID):
     data_files = []
     description = ('PGP Harvard genome, Complete Genomics masterVarBeta file '
                    'format.')
-    new_filename = 'PGP-Harvard-masterVarBeta-{}.tsv.bz2'.format(huID)
+    new_filename = 'PGP-Harvard-masterVarBeta-{}-{}.tsv.bz2'.format(huID, now_string())
     new_filepath = os.path.join(tempdir, new_filename)
     shutil.move(os.path.join(tempdir, filename), new_filepath)
     data_files.append(
@@ -217,7 +219,7 @@ def handle_mastervarbeta_file(filename, tempdir, huID):
 def make_survey_file(survey_data, tempdir, huID):
     data_files = []
     description = 'PGP Harvard survey data, JSON format.'
-    survey_filename = 'PGP-Harvard-surveys-{}.json'.format(huID)
+    survey_filename = 'PGP-Harvard-surveys-{}-{}.json'.format(huID, now_string())
     survey_filepath = os.path.join(tempdir, survey_filename)
     with open(survey_filepath, 'w') as f:
         json.dump(survey_data, f, indent=2, sort_keys=True)
