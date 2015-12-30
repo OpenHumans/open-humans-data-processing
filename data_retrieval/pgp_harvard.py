@@ -1,7 +1,7 @@
 """
 PGP Harvard data extraction.
 
-Copyright (C) 2014 PersonalGenomes.org
+Copyright (C) 2015 PersonalGenomes.org
 
 This software is shared under the "MIT License" license (aka "Expat License"),
 see LICENSE.TXT for full license text.
@@ -12,25 +12,23 @@ May be used on the command line from this project's base directory, e.g.
 
 ...will assemble data sets for the ID "hu43860C" at:
 
-   files/PGPHarvard-hu43860C-CGIgenome-20150102030405.tar.gz
-   files/PGPHarvard-hu43860C-surveys-20150102030405.tar.gz
-
-(These filenames includes a datetime stamp, January 2rd 2015 3:04:05am.)
+   files/PGP-Harvard-surveys-hu43860C.json
+   files/PGP-Harvard-var-hu43860C.tsv.bz2
+   files/PGP-Harvard-var-hu43860C.vcf.bz2
 """
-
 import json
 import os
 import re
+import shutil
 import sys
+import tempfile
 
-from cStringIO import StringIO
-from datetime import datetime
-
+import cgivar2gvcf
 import requests
 
 from bs4 import BeautifulSoup
 
-from .participant_data_set import format_filename, get_dataset, OHDataSource
+from .files import get_remote_file, mv_tempfile_to_output
 
 BASE_URL = 'https://my.pgp-hms.org'
 
@@ -57,7 +55,7 @@ def parse_uploaded_div(profile_soup):
     if not (data_div.name == 'div' and 'profile-data' in data_div['class']):
         return []
 
-    genome_file_links = []
+    file_links = []
     uploaded_data_rows = data_div.find_all('tr')
 
     for row in uploaded_data_rows:
@@ -66,25 +64,16 @@ def parse_uploaded_div(profile_soup):
         if len(cols) < 3:
             continue
 
-        # Handle rows containing data from Complete Genomics
-        if re.search(r'^\s*Complete Genomics\s*$', cols[2].text, flags=re.I):
-            link_elem = row.find('a', text=re.compile(r'^\s*Download\s*$',
-                                                      re.I))
+        file_type = cols[2].text
+        source = cols[3].text
+        link_elem = row.find('a', text=re.compile(r'^\s*Download\s*$',
+                                                  re.I))
+        if not link_elem:
+            continue
+        link = link_elem.attrs['href']
+        file_links.append({'link': link, 'type': file_type, 'source': source})
 
-            if not link_elem:
-                continue
-
-            link = link_elem.attrs['href']
-            info = 'Complete Genomics'
-
-            if re.search(r'/var-[^/]*.tsv.bz2', link):
-                info = 'Complete Genomics (var file)'
-            elif re.search(r'/masterVarBeta-[^/]*.tsv.bz2', link):
-                info = 'Complete Genomics (masterVarBeta file)'
-
-            genome_file_links.append({'link': link, 'info': info})
-
-    return genome_file_links
+    return file_links
 
 
 def parse_survey_div(profile_soup):
@@ -168,12 +157,99 @@ def parse_pgp_profile_page(huID):
     return genome_file_links, surveys
 
 
-def create_pgpharvard_ohdatasets(huID,
-                                 task_id=None,
-                                 update_url=None,
-                                 **kwargs):
+def vcf_from_var(vcf_filename, tempdir, var_filepath):
+    data_files = []
+    vcf_filepath = os.path.join(tempdir, vcf_filename)
+    # Determine local storage directory
+    storage_dir = os.path.join(
+        os.path.dirname(os.path.realpath(__file__)),
+        '..', 'resource_files')
+    reference, build = cgivar2gvcf.get_reference_genome_file(
+        refseqdir=storage_dir, build='b37')
+    cgivar2gvcf.convert_to_file(
+        cgi_input=var_filepath,
+        output_file=vcf_filepath,
+        twobit_ref=reference,
+        build=build)
+    data_files.append({
+        'temp_filename': vcf_filename,
+        'tempdir': tempdir,
+        'description': ('PGP Harvard genome, gVCF file. Derived from '
+                        'Complete Genomics file format.'),
+        'tags': ['vcf', 'gvcf', 'genome', 'Complete Genomics']})
+    return data_files
+
+
+def handle_var_file(filename, tempdir, huID):
+    data_files = []
+    var_description = 'PGP Harvard genome, Complete Genomics var file format.'
+    new_filename = 'PGP-Harvard-var-{}.tsv.bz2'.format(huID)
+    new_filepath = os.path.join(tempdir, new_filename)
+    shutil.move(os.path.join(tempdir, filename), new_filepath)
+    data_files.append({
+        'temp_filename': new_filename,
+        'tempdir': tempdir,
+        'description': var_description,
+        'tags': ['Complete Genomics', 'var', 'genome']})
+
+    vcf_filename = re.sub(r'\.tsv', '.vcf', new_filename)
+    data_files += vcf_from_var(
+        vcf_filename, tempdir, var_filepath=new_filepath)
+
+    return data_files
+
+
+def handle_mastervarbeta_file(filename, tempdir, huID):
+    data_files = []
+    description = ('PGP Harvard genome, Complete Genomics masterVarBeta file '
+                   'format.')
+    new_filename = 'PGP-Harvard-masterVarBeta-{}.tsv.bz2'.format(huID)
+    new_filepath = os.path.join(tempdir, new_filename)
+    shutil.move(os.path.join(tempdir, filename), new_filepath)
+    data_files.append(
+        {'temp_filename': new_filename,
+         'tempdir': tempdir,
+         'description': description,
+         'tags': ['Complete Genomics', 'mastervarbeta', 'genome']})
+    return data_files
+
+
+def make_survey_file(survey_data, tempdir, huID):
+    data_files = []
+    description = 'PGP Harvard survey data, JSON format.'
+    survey_filename = 'PGP-Harvard-surveys-{}.json'.format(huID)
+    survey_filepath = os.path.join(tempdir, survey_filename)
+    with open(survey_filepath, 'w') as f:
+        json.dump(survey_data, f, indent=2, sort_keys=True)
+    data_files.append({
+        'temp_filename': survey_filename,
+        'tempdir': tempdir,
+        'description': description,
+        'tags': ['json', 'survey']})
+    return data_files
+
+
+def handle_uploaded_file(filename, tempdir, huID, **kwargs):
+    temp_files = []
+    if re.search(r'^var-[^/]*.tsv.bz2', filename):
+        temp_files += handle_var_file(
+            filename, tempdir, huID, **kwargs)
+    elif re.search(r'^masterVarBeta-[^/]*.tsv.bz2', filename):
+        temp_files += handle_mastervarbeta_file(
+            filename, tempdir, huID, **kwargs)
+    else:
+        # TODO: Raise an alert. We expect all Complete Genomics files from
+        # the PGP to match one of the two above conditions.
+        pass
+    return temp_files
+
+
+def create_pgpharvard_datafiles(huID,
+                                task_id=None,
+                                update_url=None,
+                                **kwargs):
     """
-    Create Open Humans data sets from a PGP Harvard ID.
+    Create DataFiles for Open Humans from a PGP Harvard ID.
 
     Required arguments:
         huID: PGP Harvard ID (string)
@@ -187,49 +263,53 @@ def create_pgpharvard_ohdatasets(huID,
     Either 'filedir' (and no S3 arguments), or both S3 arguments (and no
     'filedir') must be specified.
     """
-    print kwargs
-    source = OHDataSource(name='Harvard Personal Genome Project',
-                          url='{}/profile/{}'.format(BASE_URL, huID),
-                          huID=huID)
+    tempdir = tempfile.mkdtemp()
+    temp_files = []
+    data_files = []
 
-    filename_genome = format_filename(source='pgp', data_type='genome')
-    filename_surveys = format_filename(source='pgp', data_type='surveys')
-
-    print 'Parsing profile...'
-    genome_links, survey_data = parse_pgp_profile_page(huID)
-
-    datasets = []
+    file_links, survey_data = parse_pgp_profile_page(huID)
 
     if survey_data:
-        print 'Gathering survey data...'
-        dataset = get_dataset(filename_surveys, source, **kwargs)
-        survey_data = StringIO(json.dumps(survey_data, indent=2,
-                                          sort_keys=True) + '\n')
-        dataset.add_file(
-            file=survey_data,
-            name=('PGPHarvard-%s-surveys-%s.json' %
-                  (huID, datetime.now().strftime('%Y%m%d%H%M%S'))))
-        dataset.close()
-        if update_url and task_id:
-            dataset.update(update_url, task_id, subtype='surveys')
-        datasets.append(dataset)
+        temp_files += make_survey_file(survey_data, tempdir, huID)
+    if file_links:
+        print 'Gathering files...'
+        for item in file_links:
+            # Only handling Complete Genomics data released by PGP.
+            if not (item['source'] == 'PGP' and
+                    item['type'] == 'Complete Genomics'):
+                continue
+            filename = get_remote_file(item['link'], tempdir)
+            temp_files += handle_uploaded_file(filename, tempdir, huID)
 
-    if genome_links:
-        print 'Gathering genome data...'
-        dataset = get_dataset(filename_genome, source, **kwargs)
-        for item in genome_links:
-            link = item['link']
-            print 'Retrieving {}'.format(link)
-            dataset.add_remote_file(url=link,
-                                    file_meta={'file_type': item['info']})
-        dataset.close()
-        if update_url and task_id:
-            dataset.update(update_url, task_id, subtype='genome')
-        datasets.append(dataset)
+    print 'Finished creating all datasets locally.'
 
-    print 'Finished with all datasets'
-    return datasets
+    for file_info in temp_files:
+        print file_info
+        filename = file_info['temp_filename']
+        file_tempdir = file_info['tempdir']
+        output_path = mv_tempfile_to_output(
+            os.path.join(file_tempdir, filename), filename, **kwargs)
+        if 's3_key_dir' in kwargs and 's3_bucket_name' in kwargs:
+            data_files.append({
+                's3_key': output_path,
+                'description': file_info['description'],
+                'tags': file_info['tags']})
+    os.rmdir(tempdir)
+
+    print 'Finished moving all datasets to permanent storage.'
+
+    if not (task_id and update_url):
+        return
+
+    task_data = {'task_id': task_id,
+                 's3_keys': [df['s3_key'] for df in data_files],
+                 'data_files': data_files}
+    status_msg = ('Updating main site ({}) with completed files for task_id={}'
+                  ' with task_data:\n{}'.format(
+                      update_url, task_id, json.dumps(task_data)))
+    print status_msg
+    requests.post(update_url, data={'task_data': json.dumps(task_data)})
 
 
 if __name__ == '__main__':
-    create_pgpharvard_ohdatasets(huID=sys.argv[1], filedir=sys.argv[2])
+    create_pgpharvard_datafiles(huID=sys.argv[1], filedir=sys.argv[2])

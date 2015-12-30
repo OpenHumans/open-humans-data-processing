@@ -4,6 +4,11 @@
 # Local environment, used by Foreman
 .env
 
+# Resource file storage, reloaded if they disappear.
+# Used to store hg19.2bit for var-to-VCF conversion of PGP Harvard genomes.
+resource_files/*
+!resource_files/.keep
+
 # Scratch directories
 files/*
 scratch/*
