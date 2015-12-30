@@ -15,6 +15,7 @@ May be used on the command line from this project's base directory, e.g.
    files/PGP-Harvard-surveys-hu43860C-20160102T030405Z.json
    files/PGP-Harvard-var-hu43860C-20160102T030405Z.tsv.bz2
    files/PGP-Harvard-var-hu43860C-20160102T030405Z.vcf.bz2
+   files/PGP-Harvard-masterVarBeta-hu43860C-20160102T030405Z.tsv.bz2
 
 (These filenames includes a datetime stamp, January 2rd 2016 3:04:05am UTC.)
 """
@@ -160,78 +161,96 @@ def parse_pgp_profile_page(huID):
 
 
 def vcf_from_var(vcf_filename, tempdir, var_filepath):
-    data_files = []
+    """
+    Generate gVCF from Complete Genomics var file.
+
+    Returns temp file info as array of dicts. Only one dict expected.
+    """
     vcf_filepath = os.path.join(tempdir, vcf_filename)
     # Determine local storage directory
     storage_dir = os.path.join(
         os.path.dirname(os.path.realpath(__file__)),
         '..', 'resource_files')
-    reference, build = cgivar2gvcf.get_reference_genome_file(
+    reference, twobit_name = cgivar2gvcf.get_reference_genome_file(
         refseqdir=storage_dir, build='b37')
+    # TODO: Mock this for performing tests. This is extremely slow.
     cgivar2gvcf.convert_to_file(
         cgi_input=var_filepath,
         output_file=vcf_filepath,
         twobit_ref=reference,
-        build=build)
-    data_files.append({
+        twobit_name=twobit_name)
+    temp_files = [{
         'temp_filename': vcf_filename,
         'tempdir': tempdir,
         'description': ('PGP Harvard genome, gVCF file. Derived from '
                         'Complete Genomics file format.'),
-        'tags': ['vcf', 'gvcf', 'genome', 'Complete Genomics']})
-    return data_files
+        'tags': ['vcf', 'gvcf', 'genome', 'Complete Genomics']}]
+    return temp_files
 
 
 def handle_var_file(filename, tempdir, huID):
-    data_files = []
+    """
+    Rename var data file from PGP Harvard genome data, generate gVCF.
+
+    Returns temp file info as array of dicts.
+    """
     var_description = 'PGP Harvard genome, Complete Genomics var file format.'
     new_filename = 'PGP-Harvard-var-{}-{}.tsv.bz2'.format(huID, now_string())
     new_filepath = os.path.join(tempdir, new_filename)
     shutil.move(os.path.join(tempdir, filename), new_filepath)
-    data_files.append({
+    temp_files = [{
         'temp_filename': new_filename,
         'tempdir': tempdir,
         'description': var_description,
-        'tags': ['Complete Genomics', 'var', 'genome']})
+        'tags': ['Complete Genomics', 'var', 'genome']}]
 
     vcf_filename = re.sub(r'\.tsv', '.vcf', new_filename)
-    data_files += vcf_from_var(
+    temp_files += vcf_from_var(
         vcf_filename, tempdir, var_filepath=new_filepath)
 
-    return data_files
+    return temp_files
 
 
 def handle_mastervarbeta_file(filename, tempdir, huID):
-    data_files = []
+    """
+    Rename masterVarBeta data file from PGP Harvard genome data.
+
+    Returns temp file info as array of dicts. Only one dict expected.
+    """
     description = ('PGP Harvard genome, Complete Genomics masterVarBeta file '
                    'format.')
-    new_filename = 'PGP-Harvard-masterVarBeta-{}-{}.tsv.bz2'.format(huID, now_string())
+    new_filename = 'PGP-Harvard-masterVarBeta-{}-{}.tsv.bz2'.format(
+        huID, now_string())
     new_filepath = os.path.join(tempdir, new_filename)
     shutil.move(os.path.join(tempdir, filename), new_filepath)
-    data_files.append(
+    temp_files = [
         {'temp_filename': new_filename,
          'tempdir': tempdir,
          'description': description,
-         'tags': ['Complete Genomics', 'mastervarbeta', 'genome']})
-    return data_files
+         'tags': ['Complete Genomics', 'mastervarbeta', 'genome']}]
+    return temp_files
 
 
 def make_survey_file(survey_data, tempdir, huID):
-    data_files = []
+    """
+    Create survey data file from PGP Harvard survey data.
+
+    Returns temp file info as array of dicts. Only one dict expected.
+    """
     description = 'PGP Harvard survey data, JSON format.'
     survey_filename = 'PGP-Harvard-surveys-{}-{}.json'.format(huID, now_string())
     survey_filepath = os.path.join(tempdir, survey_filename)
     with open(survey_filepath, 'w') as f:
         json.dump(survey_data, f, indent=2, sort_keys=True)
-    data_files.append({
+    temp_files = [{
         'temp_filename': survey_filename,
         'tempdir': tempdir,
         'description': description,
-        'tags': ['json', 'survey']})
-    return data_files
+        'tags': ['json', 'survey']}]
+    return temp_files
 
 
-def handle_uploaded_file(filename, tempdir, huID, **kwargs):
+def handle_uploaded_file(filename, tempdir, huID, sentry=None, **kwargs):
     temp_files = []
     if re.search(r'^var-[^/]*.tsv.bz2', filename):
         temp_files += handle_var_file(
@@ -240,13 +259,15 @@ def handle_uploaded_file(filename, tempdir, huID, **kwargs):
         temp_files += handle_mastervarbeta_file(
             filename, tempdir, huID, **kwargs)
     else:
-        # TODO: Raise an alert. We expect all Complete Genomics files from
-        # the PGP to match one of the two above conditions.
+        if sentry:
+            sentry.captureMessage('PGP Complete Genomics filename in '
+                                  'unexpected format: {}'.format(filename))
         pass
     return temp_files
 
 
 def create_pgpharvard_datafiles(huID,
+                                sentry=None,
                                 task_id=None,
                                 update_url=None,
                                 **kwargs):
@@ -280,8 +301,10 @@ def create_pgpharvard_datafiles(huID,
             if not (item['source'] == 'PGP' and
                     item['type'] == 'Complete Genomics'):
                 continue
+            # TODO: Mock this for performing tests. This is slow.
             filename = get_remote_file(item['link'], tempdir)
-            temp_files += handle_uploaded_file(filename, tempdir, huID)
+            temp_files += handle_uploaded_file(
+                filename, tempdir, huID, sentry=sentry)
 
     print 'Finished creating all datasets locally.'
 

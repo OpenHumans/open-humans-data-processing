@@ -181,7 +181,7 @@ def make_pgpharvard_datafiles(**task_params):
     """
     Task to initiate retrieval of PGP Harvard data set
     """
-    create_pgpharvard_datafiles(**task_params)
+    create_pgpharvard_datafiles(sentry=sentry, **task_params)
 
 
 @celery_worker.task
