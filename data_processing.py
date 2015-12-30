@@ -22,7 +22,7 @@ from werkzeug.contrib.fixers import ProxyFix
 from celery_worker import make_worker
 
 from data_retrieval.american_gut import create_amgut_ohdataset
-from data_retrieval.pgp_harvard import create_pgpharvard_ohdatasets
+from data_retrieval.pgp_harvard import create_pgpharvard_datafiles
 from data_retrieval.twenty_three_and_me import create_23andme_ohdataset
 from data_retrieval.go_viral import create_go_viral_ohdataset
 from data_retrieval.runkeeper import create_runkeeper_ohdatasets
@@ -177,11 +177,11 @@ def make_amgut_ohdataset(**task_params):
 
 
 @celery_worker.task
-def make_pgpharvard_ohdataset(**task_params):
+def make_pgpharvard_datafiles(**task_params):
     """
     Task to initiate retrieval of PGP Harvard data set
     """
-    create_pgpharvard_ohdatasets(**task_params)
+    create_pgpharvard_datafiles(sentry=sentry, **task_params)
 
 
 @celery_worker.task
@@ -250,7 +250,7 @@ def pgp_harvard():
         'huID' (string with PGP ID, eg 'hu1A2B3C')
     """
     task_params = json.loads(request.args['task_params'])
-    make_pgpharvard_ohdataset.delay(**task_params)
+    make_pgpharvard_datafiles.delay(**task_params)
     return 'PGP Harvard dataset started'
 
 
