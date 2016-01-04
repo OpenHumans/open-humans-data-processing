@@ -35,10 +35,6 @@ from .files import get_remote_file, mv_tempfile_to_output, now_string
 
 BASE_URL = 'https://my.pgp-hms.org'
 
-if os.environ.get('ENV') == 'staging':
-    PASSWORD = os.environ.get('PGP_PASSWORD')
-    BASE_URL = 'https://{}@my-dev.pgp-hms.org'.format(PASSWORD)
-
 
 def parse_uploaded_div(profile_soup):
     """
