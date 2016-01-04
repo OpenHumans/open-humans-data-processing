@@ -182,9 +182,12 @@ def vcf_from_var(vcf_filename, tempdir, var_filepath):
     temp_files = [{
         'temp_filename': vcf_filename,
         'tempdir': tempdir,
-        'description': ('PGP Harvard genome, gVCF file. Derived from '
-                        'Complete Genomics file format.'),
-        'tags': ['vcf', 'gvcf', 'genome', 'Complete Genomics']}]
+        'metadata': {
+            'description': ('PGP Harvard genome, gVCF file. Derived from '
+                            'Complete Genomics var file.'),
+            'tags': ['vcf', 'gvcf', 'genome', 'Complete Genomics'],
+            }
+        }]
     return temp_files
 
 
@@ -195,16 +198,25 @@ def handle_var_file(filename, tempdir, huID):
     Returns temp file info as array of dicts.
     """
     var_description = 'PGP Harvard genome, Complete Genomics var file format.'
-    new_filename = 'PGP-Harvard-var-{}-{}.tsv.bz2'.format(huID, now_string())
+    new_filename = 'PGP-Harvard-var-{}-{}.tsv'.format(huID, now_string())
+    if filename.endswith('.bz2'):
+        new_filename += '.bz2'
+    elif filename.endswith('.gz'):
+        new_filename += '.gz'
     new_filepath = os.path.join(tempdir, new_filename)
     shutil.move(os.path.join(tempdir, filename), new_filepath)
     temp_files = [{
         'temp_filename': new_filename,
         'tempdir': tempdir,
-        'description': var_description,
-        'tags': ['Complete Genomics', 'var', 'genome']}]
+        'metadata': {
+            'description': var_description,
+            'tags': ['Complete Genomics', 'var', 'genome'],
+        },
+    }]
 
     vcf_filename = re.sub(r'\.tsv', '.vcf', new_filename)
+    if not (vcf_filename.endswith('.gz') or vcf_filename.endswith('.bz2')):
+        vcf_filename += '.bz2'
     temp_files += vcf_from_var(
         vcf_filename, tempdir, var_filepath=new_filepath)
 
@@ -219,15 +231,22 @@ def handle_mastervarbeta_file(filename, tempdir, huID):
     """
     description = ('PGP Harvard genome, Complete Genomics masterVarBeta file '
                    'format.')
-    new_filename = 'PGP-Harvard-masterVarBeta-{}-{}.tsv.bz2'.format(
+    new_filename = 'PGP-Harvard-masterVarBeta-{}-{}.tsv'.format(
         huID, now_string())
+    if filename.endswith('.bz2'):
+        new_filename += '.bz2'
+    elif filename.endswith('.gz'):
+        new_filename += '.gz'
     new_filepath = os.path.join(tempdir, new_filename)
     shutil.move(os.path.join(tempdir, filename), new_filepath)
-    temp_files = [
-        {'temp_filename': new_filename,
-         'tempdir': tempdir,
-         'description': description,
-         'tags': ['Complete Genomics', 'mastervarbeta', 'genome']}]
+    temp_files = [{
+        'temp_filename': new_filename,
+        'tempdir': tempdir,
+        'metadata': {
+            'description': description,
+            'tags': ['Complete Genomics', 'mastervarbeta', 'genome'],
+            },
+        }]
     return temp_files
 
 
@@ -245,8 +264,11 @@ def make_survey_file(survey_data, tempdir, huID):
     temp_files = [{
         'temp_filename': survey_filename,
         'tempdir': tempdir,
-        'description': description,
-        'tags': ['json', 'survey']}]
+        'metadata': {
+            'description': description,
+            'tags': ['json', 'survey'],
+            },
+        }]
     return temp_files
 
 
@@ -302,14 +324,17 @@ def create_pgpharvard_datafiles(huID,
                     item['type'] == 'Complete Genomics'):
                 continue
             # TODO: Mock this for performing tests. This is slow.
+            print "Getting file from {}".format(item['link'])
             filename = get_remote_file(item['link'], tempdir)
+            print "Retrieved file from {} with filename: {}".format(
+                item['link'], filename)
             temp_files += handle_uploaded_file(
                 filename, tempdir, huID, sentry=sentry)
 
     print 'Finished creating all datasets locally.'
 
     for file_info in temp_files:
-        print file_info
+        print "File info: {}".format(str(file_info))
         filename = file_info['temp_filename']
         file_tempdir = file_info['tempdir']
         output_path = mv_tempfile_to_output(
@@ -317,8 +342,8 @@ def create_pgpharvard_datafiles(huID,
         if 's3_key_dir' in kwargs and 's3_bucket_name' in kwargs:
             data_files.append({
                 's3_key': output_path,
-                'description': file_info['description'],
-                'tags': file_info['tags']})
+                'metadata': file_info['metadata'],
+            })
     os.rmdir(tempdir)
 
     print 'Finished moving all datasets to permanent storage.'
