@@ -23,7 +23,7 @@ from celery_worker import make_worker
 
 from data_retrieval.american_gut import create_amgut_ohdataset
 from data_retrieval.pgp_harvard import create_pgpharvard_datafiles
-from data_retrieval.twenty_three_and_me import create_23andme_ohdataset
+from data_retrieval.twenty_three_and_me import create_23andme_datafiles
 from data_retrieval.go_viral import create_go_viral_ohdataset
 from data_retrieval.runkeeper import create_runkeeper_ohdatasets
 from data_retrieval.wildlife import create_wildlife_ohdataset
@@ -154,12 +154,12 @@ def task_postrun_handler_cb(sender=None, state=None, kwargs=None,
 
 # Celery tasks
 @celery_worker.task
-def make_23andme_ohdataset(**task_params):
+def make_23andme_datafiles(**task_params):
     """
     Task to initiate retrieval of 23andMe data set.
     """
     file_url = task_params.pop('file_url')
-    create_23andme_ohdataset(file_url=file_url, sentry=sentry, **task_params)
+    create_23andme_datafiles(file_url=file_url, sentry=sentry, **task_params)
 
 
 @celery_worker.task
@@ -224,7 +224,7 @@ def twenty_three_and_me():
         'file_url' (string, for accessing the uploaded file)
     """
     task_params = json.loads(request.args['task_params'])
-    make_23andme_ohdataset.delay(**task_params)
+    make_23andme_datafiles.delay(**task_params)
     return '23andMe dataset started'
 
 

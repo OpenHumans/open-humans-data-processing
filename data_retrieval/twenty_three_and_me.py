@@ -15,13 +15,13 @@ Will assemble a data set in files/
 """
 import bz2
 import gzip
+import json
 import os
 import re
 import requests
 import shutil
 import sys
 import tempfile
-from urlparse import urlparse
 import zipfile
 
 from cStringIO import StringIO
@@ -29,7 +29,7 @@ from datetime import date, datetime
 
 from boto.s3.connection import S3Connection
 
-from .participant_data_set import format_filename, get_dataset, OHDataSource
+from .files import get_remote_file, mv_tempfile_to_output, now_string
 
 REF_23ANDME_FILE = os.path.join(
     os.path.dirname(__file__), '23andme', 'reference_b37.txt')
@@ -227,17 +227,14 @@ def clean_raw_23andme(input_filepath, sentry=None):
     return output
 
 
-def create_23andme_ohdataset(input_file=None,
+def create_23andme_datafiles(username,
+                             input_file=None,
                              file_url=None,
                              task_id=None,
                              update_url=None,
                              sentry=None,
                              **kwargs):
     """Create Open Humans Dataset from uploaded 23andme full genotyping data
-
-    Required arguments:
-        access_token: 23andme access token
-        profile_id: 23andme profile ID
 
     Optional arguments:
         input_file: path to a local copy of the uploaded file
@@ -247,59 +244,93 @@ def create_23andme_ohdataset(input_file=None,
         s3_key_dir: S3 key "directory" to write resulting file. The full S3 key
                     name will add a filename to the end of s3_key_dir.
 
-    Either 'input_file', or both 'input_s3_bucket' and 'input_s3_key' (and no
-    'input_file') must be specified.
+    For input: either 'input_file' or 'file_url' must be specified.
+    (The first is a path to a local file, the second is a URL to a remote one.)
 
-    Either 'filedir' (and no S3 arguments), or both s3_bucket_name and
-    s3_key_dir (and no 'filedir') must be specified.
+    For output: iither 'filedir' (and no S3 arguments), or both
+    's3_bucket_name' and 's3_key_dir' (and no 'filedir') must be specified.
     """
-    filename = format_filename(source='twenty-three-and-me',
-                               data_type='genotyping')
+    tempdir = tempfile.mkdtemp()
+    temp_files = []
+    data_files = []
 
     if file_url and not input_file:
-        # Create a local temp dir to work with this file, copy file to it.
-        tempdir = tempfile.mkdtemp()
-        r = requests.get(file_url, stream=True)
-        req_url = r.url
-        basename = os.path.basename(urlparse(req_url).path)
-        input_file = os.path.join(tempdir, basename)
-        with open(input_file, 'wb') as fd:
-            for chunk in r.iter_content(chunk_size=1024):
-                fd.write(chunk)
+        filename = get_remote_file(file_url, tempdir)
+        input_file = os.path.join(tempdir, filename)
     elif input_file and not file_url:
         pass
     else:
         raise 'Run with either input_file, or file_url'
 
+    filename_base = '23andme-{}-genotyping'.format(username)
+
     raw_23andme = clean_raw_23andme(input_file, sentry)
     raw_23andme.seek(0)
-
     vcf_23andme = vcf_from_raw_23andme(raw_23andme)
-    raw_23andme.seek(0)
-    vcf_23andme.seek(0)
 
-    # Set up output data set file.
-    source = OHDataSource(name='23andMe User Download',
-                          url='https://www.23andme.com/you/download/')
-    dataset = get_dataset(filename, source, **kwargs)
+    # Save raw 23andMe genotyping to temp file.
+    raw_filename = filename_base + '.txt'
+    with open(os.path.join(tempdir, raw_filename), 'w') as raw_file:
+        raw_23andme.seek(0)
+        shutil.copyfileobj(raw_23andme, raw_file)
+        temp_files.append({
+            'temp_filename': raw_filename,
+            'tempdir': tempdir,
+            'metadata': {
+                'description': "23andMe full genotyping data, original format",
+                'tags': ['23andMe', 'genotyping'],
+            },
+        })
 
-    dataset.add_file(file=raw_23andme, name='23andme-full-genotyping.txt')
-    dataset.add_file(file=vcf_23andme, name='23andme-full-genotyping.vcf')
-    dataset.close()
+    # Save VCF 23andMe genotyping to temp file.
+    vcf_filename = filename_base + '.vcf'
+    with open(os.path.join(tempdir, vcf_filename), 'w') as vcf_file:
+        vcf_23andme.seek(0)
+        shutil.copyfileobj(vcf_23andme, vcf_file)
+        temp_files.append({
+            'temp_filename': vcf_filename,
+            'tempdir': tempdir,
+            'metadata': {
+                'description': "23andMe full genotyping data, VCF format",
+                'tags': ['23andMe', 'genotyping', 'vcf'],
+            },
+        })
 
+    print 'Finished creating all datasets locally.'
+
+    for file_info in temp_files:
+        print "File info: {}".format(str(file_info))
+        filename = file_info['temp_filename']
+        file_tempdir = file_info['tempdir']
+        output_path = mv_tempfile_to_output(
+            os.path.join(file_tempdir, filename), filename, **kwargs)
+        if 's3_key_dir' in kwargs and 's3_bucket_name' in kwargs:
+            data_files.append({
+                's3_key': output_path,
+                'metadata': file_info['metadata'],
+            })
     if file_url:
         os.remove(input_file)
-        shutil.rmtree(tempdir)
+    os.rmdir(tempdir)
 
-    if update_url and task_id:
-        dataset.update(update_url, task_id, subtype='genotyping')
+    print 'Finished moving all datasets to permanent storage.'
 
-    return dataset
+    if not (task_id and update_url):
+        return
+
+    task_data = {'task_id': task_id,
+                 's3_keys': [df['s3_key'] for df in data_files],
+                 'data_files': data_files}
+    status_msg = ('Updating main site ({}) with completed files for task_id={}'
+                  ' with task_data:\n{}'.format(
+                      update_url, task_id, json.dumps(task_data)))
+    print status_msg
+    requests.post(update_url, data={'task_data': json.dumps(task_data)})
 
 
 if __name__ == '__main__':
-    if len(sys.argv) != 3:
-        print 'Please specify a remote file URL, and target local directory.'
+    if len(sys.argv) != 4:
+        print 'Please specify a remote file URL, target local directory, and username.'
         sys.exit(1)
 
-    create_23andme_ohdataset(file_url=sys.argv[1], filedir=sys.argv[2])
+    create_23andme_datafiles(file_url=sys.argv[1], filedir=sys.argv[2], username=sys.argv[3])
