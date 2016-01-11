@@ -137,7 +137,7 @@ def vcf_from_raw_23andme(raw_23andme):
     return output
 
 
-def clean_raw_23andme(input_filepath, sentry=None):
+def clean_raw_23andme(input_filepath, sentry=None, username=None):
     """
     Create clean file in 23andme format from downloaded version
 
@@ -221,7 +221,10 @@ def clean_raw_23andme(input_filepath, sentry=None):
                 output.write(line)
     else:
         if sentry:
-            sentry.captureMessage('23andMe header did not conform to expected format')
+            sentry_msg = '23andMe header did not conform to expected format.'
+            if username:
+                sentry_msg = sentry_msg + " Username: {}".format(username)
+            sentry.captureMessage(sentry_msg)
 
     bad_format = False
 
@@ -230,13 +233,17 @@ def clean_raw_23andme(input_filepath, sentry=None):
             output.write(next_line)
         else:
             bad_format = True
+            print "BAD FORMAT:\n{}".format(next_line)
         try:
             next_line = inputfile.next()
         except StopIteration:
             next_line = None
 
     if bad_format and sentry:
-        sentry.captureMessage('23andMe body did not conform to expected format')
+        sentry_msg = '23andMe body did not conform to expected format.'
+        if username:
+            sentry_msg = sentry_msg + " Username: {}".format(username)
+        sentry.captureMessage(sentry_msg)
 
     return output
 
@@ -278,7 +285,7 @@ def create_23andme_datafiles(username,
 
     filename_base = '23andme-{}-genotyping'.format(username)
 
-    raw_23andme = clean_raw_23andme(input_file, sentry)
+    raw_23andme = clean_raw_23andme(input_file, sentry, username)
     raw_23andme.seek(0)
     vcf_23andme = vcf_from_raw_23andme(raw_23andme)
 
