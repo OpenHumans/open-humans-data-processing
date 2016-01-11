@@ -12,10 +12,10 @@ May be used on the command line from this project's base directory, e.g.
 
 ...assembles data sets for the ID "hu43860C" in the "files" directory, e.g.:
 
-   files/PGP-Harvard-surveys-hu43860C-20160102T030405Z.json
-   files/PGP-Harvard-var-hu43860C-20160102T030405Z.tsv.bz2
-   files/PGP-Harvard-var-hu43860C-20160102T030405Z.vcf.bz2
-   files/PGP-Harvard-masterVarBeta-hu43860C-20160102T030405Z.tsv.bz2
+   files/PGP-Harvard-hu43860C-surveys.json
+   files/PGP-Harvard-hu43860C-var.tsv.bz2
+   files/PGP-Harvard-hu43860C-var.vcf.bz2
+   files/PGP-Harvard-hu43860C-masterVarBeta.tsv.bz2
 
 (These filenames includes a datetime stamp, January 2rd 2016 3:04:05am UTC.)
 """
@@ -194,7 +194,7 @@ def handle_var_file(filename, tempdir, huID):
     Returns temp file info as array of dicts.
     """
     var_description = 'PGP Harvard genome, Complete Genomics var file format.'
-    new_filename = 'PGP-Harvard-var-{}-{}.tsv'.format(huID, now_string())
+    new_filename = 'PGP-Harvard-{}-var.tsv'.format(huID)
     if filename.endswith('.bz2'):
         new_filename += '.bz2'
     elif filename.endswith('.gz'):
@@ -227,8 +227,7 @@ def handle_mastervarbeta_file(filename, tempdir, huID):
     """
     description = ('PGP Harvard genome, Complete Genomics masterVarBeta file '
                    'format.')
-    new_filename = 'PGP-Harvard-masterVarBeta-{}-{}.tsv'.format(
-        huID, now_string())
+    new_filename = 'PGP-Harvard-{}-masterVarBeta.tsv'.format(huID)
     if filename.endswith('.bz2'):
         new_filename += '.bz2'
     elif filename.endswith('.gz'):
@@ -253,7 +252,7 @@ def make_survey_file(survey_data, tempdir, huID):
     Returns temp file info as array of dicts. Only one dict expected.
     """
     description = 'PGP Harvard survey data, JSON format.'
-    survey_filename = 'PGP-Harvard-surveys-{}-{}.json'.format(huID, now_string())
+    survey_filename = 'PGP-Harvard-{}-surveys.json'.format(huID)
     survey_filepath = os.path.join(tempdir, survey_filename)
     with open(survey_filepath, 'w') as f:
         json.dump(survey_data, f, indent=2, sort_keys=True)

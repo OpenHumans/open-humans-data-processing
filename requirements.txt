@@ -11,7 +11,7 @@ billiard==3.3.0.21        # via celery
 blinker==1.4              # via raven
 boto==2.38.0
 celery==3.1.19
-cgivar2gvcf==0.1.5
+cgivar2gvcf==0.1.6
 click==6.2                # via pip-tools
 first==2.0.1              # via pip-tools
 Flask-SSLify==0.1.5
