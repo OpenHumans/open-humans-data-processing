@@ -153,7 +153,7 @@ def parse_pgp_profile_page(huID):
     genome_file_links = parse_uploaded_div(profile_soup)
     surveys = parse_survey_div(profile_soup)
 
-    return genome_file_links, surveys
+    return genome_file_links, surveys, url
 
 
 def vcf_from_var(vcf_filename, tempdir, var_filepath):
@@ -187,7 +187,7 @@ def vcf_from_var(vcf_filename, tempdir, var_filepath):
     return temp_files
 
 
-def handle_var_file(filename, tempdir, huID):
+def handle_var_file(filename, tempdir, huID, source):
     """
     Rename var data file from PGP Harvard genome data, generate gVCF.
 
@@ -207,6 +207,8 @@ def handle_var_file(filename, tempdir, huID):
         'metadata': {
             'description': var_description,
             'tags': ['Complete Genomics', 'var', 'genome'],
+            'sourceURL': source,
+            'originalFilename': filename,
         },
     }]
 
@@ -219,7 +221,7 @@ def handle_var_file(filename, tempdir, huID):
     return temp_files
 
 
-def handle_mastervarbeta_file(filename, tempdir, huID):
+def handle_mastervarbeta_file(filename, tempdir, huID, source):
     """
     Rename masterVarBeta data file from PGP Harvard genome data.
 
@@ -240,12 +242,14 @@ def handle_mastervarbeta_file(filename, tempdir, huID):
         'metadata': {
             'description': description,
             'tags': ['Complete Genomics', 'mastervarbeta', 'genome'],
+            'sourceURL': source,
+            'originalFilename': filename,
             },
         }]
     return temp_files
 
 
-def make_survey_file(survey_data, tempdir, huID):
+def make_survey_file(survey_data, tempdir, huID, source):
     """
     Create survey data file from PGP Harvard survey data.
 
@@ -262,20 +266,30 @@ def make_survey_file(survey_data, tempdir, huID):
         'metadata': {
             'description': description,
             'tags': ['json', 'survey'],
+            'sourceURL': source,
             },
         }]
     return temp_files
 
 
-def handle_uploaded_file(filename, tempdir, huID, sentry=None, **kwargs):
+def handle_uploaded_file(filename,
+                         tempdir,
+                         huID,
+                         source,
+                         sentry=None,
+                         **kwargs):
     temp_files = []
     if re.search(r'^var-[^/]*.tsv.bz2', filename):
         temp_files += handle_var_file(
-            filename, tempdir, huID, **kwargs)
+            filename, tempdir, huID, source, **kwargs)
     elif re.search(r'^masterVarBeta-[^/]*.tsv.bz2', filename):
         temp_files += handle_mastervarbeta_file(
-            filename, tempdir, huID, **kwargs)
+            filename, tempdir, huID, source, **kwargs)
     else:
+        # We've had one case of an old file not matching standard name format.
+        # For this person there is a more recent file, so we'll just skip it.
+        if filename == "GS000005532-ASM.tsv.bz2":
+            pass
         if sentry:
             sentry.captureMessage('PGP Complete Genomics filename in '
                                   'unexpected format: {}'.format(filename))
@@ -307,10 +321,11 @@ def create_pgpharvard_datafiles(huID,
     temp_files = []
     data_files = []
 
-    file_links, survey_data = parse_pgp_profile_page(huID)
+    file_links, survey_data, profile_url = parse_pgp_profile_page(huID)
 
     if survey_data:
-        temp_files += make_survey_file(survey_data, tempdir, huID)
+        temp_files += make_survey_file(
+            survey_data, tempdir, huID, source=profile_url)
     if file_links:
         print 'Gathering files...'
         for item in file_links:
@@ -324,7 +339,7 @@ def create_pgpharvard_datafiles(huID,
             print "Retrieved file from {} with filename: {}".format(
                 item['link'], filename)
             temp_files += handle_uploaded_file(
-                filename, tempdir, huID, sentry=sentry)
+                filename, tempdir, huID, source=item['link'], sentry=sentry)
 
     print 'Finished creating all datasets locally.'
 
