@@ -122,6 +122,8 @@ def update_surveyid_to_sampleacc(storage_filepath,
             metadata, _ = fetch_metadata_xml(
                 accession=sample['sample_accession'])
             survey_id = metadata['survey_id']
+            if survey_id == 'Unknown':
+                continue
             if survey_id in survey_to_samples:
                 survey_to_samples[survey_id].append(sample['sample_accession'])
             else:
@@ -133,7 +135,7 @@ def update_surveyid_to_sampleacc(storage_filepath,
             break
 
     with open(storage_filepath, 'w') as f:
-        json.dump(survey_to_samples, f, indent=2)
+        json.dump(survey_to_samples, f, indent=2, sort_keys=True)
 
     return additions
 
