@@ -1,5 +1,5 @@
 """
-American Gut EBI metadata extraction.
+American Gut ENA data extraction.
 
 Copyright (C) 2014 PersonalGenomes.org
 
@@ -33,13 +33,13 @@ SURVEYID_TO_SAMPACC_FILE = os.path.join(
     'american-gut',
     'survey_id_to_sample_accession.json')
 
-EBI_STUDY_ACCESSIONS = ['ERP012803']
+ENA_STUDY_ACCESSIONS = ['ERP012803']
 
 MAX_ATTEMPTS = 5
 
 
 def get_ena_url_response(url):
-    """EBI sometimes unresponsive, use this to try multiple times."""
+    """ENA is sometimes unresponsive, use this to try multiple times."""
     attempts = 0
     while attempts < MAX_ATTEMPTS:
         attempts += 1
@@ -53,7 +53,7 @@ def get_ena_url_response(url):
 
 
 def get_ena_info_set(accession, fields_list=None):
-    """Get database information from EBI"""
+    """Get database information from ENA"""
     url = ('http://www.ebi.ac.uk/ena/data/warehouse/filereport?'
            'accession=%(accession)s&result=read_run' %
            {'accession': accession})
@@ -88,12 +88,12 @@ def fetch_metadata_xml(accession):
 
 
 def update_surveyid_to_sampleacc(storage_filepath,
-                                 study_accessions=EBI_STUDY_ACCESSIONS,
+                                 study_accessions=ENA_STUDY_ACCESSIONS,
                                  max_additions=100):
     """
     Script to build the correspondence of survey IDs to sample accessions.
 
-    On EBI, survey IDs are only available through the metadata for a sample.
+    In ENA, survey IDs are only available through the metadata for a sample.
     To determine which sample accessions correspond to survey IDs, we need to
     query all samples. Once we've retrieved this, we store as a file so we
     don't need to do this again.
@@ -243,7 +243,7 @@ def create_amgut_datafiles(survey_ids,
     for survey_id in survey_ids:
         if survey_id not in surveyid_to_sampacc:
             # If we can't match the survey ID to sample accession, the data
-            # isn't yet available in EBI. This situation might arise if the
+            # isn't yet available in ENA. This situation might arise if the
             # sample hasn't been analyzed yet (but American Gut is still
             # offering the barcode to Open Humans). Conclusion by OH should be
             # "Data not available."
@@ -255,7 +255,7 @@ def create_amgut_datafiles(survey_ids,
         for sampleacc in surveyid_to_sampacc[survey_id]:
             filename_base = 'American-Gut-{}'.format(sampleacc)
 
-            # Get EBI information. Describes repository items and accessions.
+            # Get ENA information. Describes repository items and accessions.
             ena_info, url = get_ena_info_set(accession=sampleacc)
             temp_files += handle_ena_info(
                 ena_info=ena_info,
@@ -274,11 +274,11 @@ def create_amgut_datafiles(survey_ids,
             # Process to get individual read files.
             # A sample can have more than one read file if it has more than one
             # run, e.g. if the first run had unsatisfactory quality.
-            for ebi_info_item in ena_info:
-                fastq_url = 'http://' + ebi_info_item['fastq_ftp']
+            for ena_info_item in ena_info:
+                fastq_url = 'http://' + ena_info_item['fastq_ftp']
                 print "Retrieving file from: {}".format(fastq_url)
                 fastq_filename = filename_base + '-run-{}.fastq'.format(
-                    ebi_info_item['run_accession'])
+                    ena_info_item['run_accession'])
                 orig_filename = get_remote_file(fastq_url, tempdir)
                 if orig_filename.endswith('.gz'):
                     new_fn = fastq_filename + '.gz'
