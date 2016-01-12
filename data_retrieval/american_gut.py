@@ -140,33 +140,6 @@ def update_surveyid_to_sampleacc(storage_filepath,
     return additions
 
 
-def _get_all_barcodes(accessions=EBI_STUDY_ACCESSIONS):
-    """
-    Get barcodes for each sample accession in EBI data.
-
-    Barcodes are used to look up American Gut samples and associated
-    information for creating a dataset for Open Humans.
-
-    Returns a dict where keys are barcodes, values are sample accessions.
-    """
-    acc_from_barcode = {}
-    fields_list = ['sample_accession', 'library_name']
-
-    for acc in accessions:
-        ebi_info_set, _ = get_ena_info_set(accession=acc,
-                                           fields_list=fields_list)
-
-        for sample_info in ebi_info_set:
-            # Notes on barcodes: The standard barcode seems to be 9 digits,
-            # but many don't match this pattern. Most are probably blanks and
-            # other controls. To be safe, we save information for all of them.
-            barcode = sample_info['library_name'].split('.')[1]
-
-            acc_from_barcode[barcode] = sample_info['sample_accession']
-
-    return acc_from_barcode
-
-
 def dict_list_as_tsv(list_of_dicts):
     header = sorted(list_of_dicts[0].keys())
     output = '\t'.join([re.sub('\t', '    ', x) for x in header]) + '\n'
