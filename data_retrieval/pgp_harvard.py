@@ -31,7 +31,7 @@ import requests
 
 from bs4 import BeautifulSoup
 
-from .files import get_remote_file, mv_tempfile_to_output, now_string
+from .files import get_remote_file, mv_tempfile_to_output
 
 BASE_URL = 'https://my.pgp-hms.org'
 
