@@ -150,7 +150,7 @@ def dict_list_as_tsv(list_of_dicts):
 
 
 def handle_ena_info(ena_info, tempdir, filename_base, source):
-    tsv_filename = filename_base + '-ena-data.tsv'
+    tsv_filename = filename_base + '-ena-info.tsv'
     tsv_filepath = os.path.join(tempdir, tsv_filename)
     with open(tsv_filepath, 'w') as f:
         for line in dict_list_as_tsv(ena_info):
@@ -182,11 +182,11 @@ def handle_ena_info(ena_info, tempdir, filename_base, source):
 
 
 def handle_ena_metadata(ena_metadata, tempdir, filename_base, source):
-    tsv_filename = filename_base + '-ena-metadata.tsv'
+    tsv_filename = filename_base + '-metadata.tsv'
     with open(os.path.join(tempdir, tsv_filename), 'w') as f:
         for line in dict_list_as_tsv([ena_metadata]):
             f.write(line)
-    json_filename = filename_base + '-ena-metadata.json'
+    json_filename = filename_base + '-metadata.json'
     with open(os.path.join(tempdir, json_filename), 'w') as f:
         json.dump(ena_metadata, f, indent=2, sort_keys=True)
     temp_files = [{
