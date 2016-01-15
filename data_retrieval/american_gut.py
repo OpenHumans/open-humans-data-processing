@@ -292,9 +292,8 @@ def create_amgut_datafiles(survey_ids,
                     'temp_filename': new_fn,
                     'tempdir': tempdir,
                     'metadata': {
-                        'description': ('American Gut 16S FASTQ sequencing '
-                                        'sample survey data and metadata, '
-                                        'JSON format.'),
+                        'description': ('American Gut 16S FASTQ raw sequencing '
+                                        'data.'),
                         'tags': ['fastq', 'American Gut', '16S'],
                         'sourceURL': fastq_url,
                         'originalFilename': orig_filename,
