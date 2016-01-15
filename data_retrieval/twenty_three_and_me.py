@@ -283,7 +283,7 @@ def create_23andme_datafiles(username,
     else:
         raise 'Run with either input_file, or file_url'
 
-    filename_base = '23andme-{}-genotyping'.format(username)
+    filename_base = '23andMe-genotyping'
 
     raw_23andme = clean_raw_23andme(input_file, sentry, username)
     raw_23andme.seek(0)
