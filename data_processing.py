@@ -21,7 +21,7 @@ from werkzeug.contrib.fixers import ProxyFix
 
 from celery_worker import make_worker
 
-from data_retrieval.american_gut import create_amgut_ohdataset
+from data_retrieval.american_gut import create_amgut_datafiles
 from data_retrieval.pgp_harvard import create_pgpharvard_datafiles
 from data_retrieval.twenty_three_and_me import create_23andme_datafiles
 from data_retrieval.go_viral import create_go_viral_ohdataset
@@ -163,7 +163,7 @@ def make_23andme_datafiles(**task_params):
 
 
 @celery_worker.task
-def make_amgut_ohdataset(**task_params):
+def make_amgut_datafiles(**task_params):
     """
     Task to initiate retrieval of American Gut data set.
 
@@ -173,7 +173,7 @@ def make_amgut_ohdataset(**task_params):
     """
     data = task_params.pop('data')
     if 'surveyIds' in data:
-        create_amgut_ohdataset(survey_ids=data['surveyIds'], **task_params)
+        create_amgut_datafiles(survey_ids=data['surveyIds'], **task_params)
 
 
 @celery_worker.task
@@ -237,7 +237,7 @@ def american_gut():
         'data' (JSON format, must contain 'surveyIDs')
     """
     task_params = json.loads(request.args['task_params'])
-    make_amgut_ohdataset.delay(**task_params)
+    make_amgut_datafiles.delay(**task_params)
     return 'Amgut dataset started'
 
 
