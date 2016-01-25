@@ -149,7 +149,8 @@ def clean_raw_23andme(input_filepath, sentry=None, username=None):
                      'archive.')
     if input_filepath.endswith('.zip'):
         zip23andme = zipfile.ZipFile(input_filepath)
-        zipfilelist = zip23andme.namelist()
+        zipfilelist = [f for f in zip23andme.namelist() if not
+                       f.startswith('__MACOSX/')]
         if len(zipfilelist) != 1:
             raise ValueError(error_message)
         inputfile = zip23andme.open(zipfilelist[0])
