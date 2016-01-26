@@ -24,7 +24,7 @@ from celery_worker import make_worker
 from data_retrieval.american_gut import create_amgut_datafiles
 from data_retrieval.pgp_harvard import create_pgpharvard_datafiles
 from data_retrieval.twenty_three_and_me import create_23andme_datafiles
-from data_retrieval.go_viral import create_go_viral_ohdataset
+from data_retrieval.go_viral import create_go_viral_datafiles
 from data_retrieval.runkeeper import create_runkeeper_ohdatasets
 from data_retrieval.wildlife import create_wildlife_ohdataset
 
@@ -185,11 +185,11 @@ def make_pgpharvard_datafiles(**task_params):
 
 
 @celery_worker.task
-def make_go_viral_ohdataset(**task_params):
+def make_go_viral_datafiles(**task_params):
     """
     Task to initiate retrieval of GoViral data set
     """
-    create_go_viral_ohdataset(**task_params)
+    create_go_viral_datafiles(**task_params)
 
 
 @celery_worker.task
@@ -263,7 +263,7 @@ def go_viral():
         'go_viral_id' (string with GoViral ID)
     """
     task_params = json.loads(request.args['task_params'])
-    make_go_viral_ohdataset.delay(**task_params)
+    make_go_viral_datafiles.delay(**task_params)
     return 'GoViral dataset started'
 
 
