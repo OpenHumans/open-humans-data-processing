@@ -46,6 +46,7 @@ app.config.update(
     CELERY_ACCEPT_CONTENT=['json'],
     CELERY_TASK_SERIALIZER='json',
     CELERY_RESULT_SERIALIZER='json',
+    CELERY_SEND_EVENTS=False,
     CELERYD_LOG_COLOR=True,
     BROKER_POOL_LIMIT=0)
 
