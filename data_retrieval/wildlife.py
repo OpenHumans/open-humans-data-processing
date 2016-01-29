@@ -8,6 +8,7 @@ see LICENSE.TXT for full license text.
 """
 import json
 import os
+import re
 import requests
 import tempfile
 
@@ -41,13 +42,26 @@ def create_wildlife_datafiles(files,
     for filename in files:
         url = files[filename]
         filename = get_remote_file(url, tempdir)
-        print filename
+        description = ''
+        tags = []
+        if re.search('home-data-', filename):
+            description = ('Geographical and architectural information about '
+                           'residence')
+            tags = ['survey', 'location', 'Wild Life of Our Homes']
+        elif re.search('fungi-kit-', filename):
+            description = ('Fungi ITS-based OTU counts and taxonomic '
+                           'classifications')
+            tags = ['fungi', 'OTU', 'ITS']
+        elif re.search('bacteria-kit-', filename):
+            description = ('Bacteria 16S-based OTU counts and taxonomic '
+                           'classifications')
+            tags = ['bacteria', 'OTU', '16S']
         temp_files += [{
             'temp_filename': filename,
             'tempdir': tempdir,
             'metadata': {
-                'description': 'dunno',
-                'tages': [],
+                'description': description,
+                'tags': tags,
             }
         }]
 
