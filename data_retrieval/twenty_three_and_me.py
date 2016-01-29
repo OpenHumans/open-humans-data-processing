@@ -282,7 +282,7 @@ def create_23andme_datafiles(username,
     elif input_file and not file_url:
         pass
     else:
-        raise 'Run with either input_file, or file_url'
+        raise Exception('Run with either input_file, or file_url')
 
     filename_base = '23andMe-genotyping'
 
