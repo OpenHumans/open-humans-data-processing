@@ -174,7 +174,8 @@ def make_amgut_datafiles(**task_params):
     """
     data = task_params.pop('data')
     if 'surveyIds' in data:
-        create_amgut_datafiles(survey_ids=data['surveyIds'], **task_params)
+        create_amgut_datafiles(survey_ids=data['surveyIds'],
+                               sentry=sentry, **task_params)
 
 
 @celery_worker.task
@@ -190,7 +191,7 @@ def make_go_viral_datafiles(**task_params):
     """
     Task to initiate retrieval of GoViral data set
     """
-    create_go_viral_datafiles(**task_params)
+    create_go_viral_datafiles(sentry=sentry, **task_params)
 
 
 @celery_worker.task
@@ -212,7 +213,8 @@ def make_wildlife_datafiles(**task_params):
     """
     data = task_params.pop('data')
     if 'files' in data:
-        create_wildlife_datafiles(files=data['files'], **task_params)
+        create_wildlife_datafiles(files=data['files'], sentry=sentry,
+                                  **task_params)
 
 
 # Pages to receive task requests

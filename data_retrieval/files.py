@@ -57,6 +57,9 @@ def get_remote_file(url, tempdir):
     Get and save a remote file to temporary directory. Return filename used.
     """
     req = requests.get(url, stream=True)
+    if not req.status_code == 200:
+        msg = ('File URL not working! Data processing aborted: {}'.format(url))
+        raise msg
     orig_filename = ''
     if 'Content-Disposition' in req.headers:
         regex = re.match(r'attachment; filename="(.*)"$',
