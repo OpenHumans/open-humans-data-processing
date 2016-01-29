@@ -6,16 +6,21 @@ Copyright (C) 2015 PersonalGenomes.org
 This software is shared under the "MIT License" license (aka "Expat License"),
 see LICENSE.TXT for full license text.
 """
+import json
+import os
+import re
+import requests
+import tempfile
 
-from .participant_data_set import format_filename, get_dataset, OHDataSource
+from .files import get_remote_file, mv_tempfile_to_output
 
 
-def create_wildlife_ohdataset(files,
+def create_wildlife_datafiles(files,
                               task_id=None,
                               update_url=None,
                               **kwargs):
     """
-    Create a dataset from a set of Wild Life of Our Homes file links.
+    Create datafiles from a set of Wild Life of Our Homes file links.
 
     Required arguments:
         files: dict containing filenames and URLs to the files
@@ -30,24 +35,61 @@ def create_wildlife_ohdataset(files,
     Either 'filedir' (and no S3 arguments), or both S3 arguments (and no
     'filedir') must be specified.
     """
-    # Set up for constructing the OH dataset file.
-    source = OHDataSource(
-        name='Wild Life of Our Homes',
-        url='http://robdunnlab.com/projects/wild-life-of-our-homes/')
-    filename = format_filename(source='wildlife',
-                               data_type='bacterial-and-fungal-profiling')
-    dataset = get_dataset(filename, source, **kwargs)
+    tempdir = tempfile.mkdtemp()
+    temp_files = []
+    data_files = []
 
     for filename in files:
         url = files[filename]
-        new_filename = filename[:-4] if filename.endswith('.bz2') else filename
-        new_filename = new_filename[:-3] if new_filename.endswith('.gz') else new_filename
-        dataset.add_remote_file(
-            url=url,
-            filename=new_filename)
+        filename = get_remote_file(url, tempdir)
+        description = ''
+        tags = []
+        if re.search('home-data-', filename):
+            description = ('Geographical and architectural information about '
+                           'residence')
+            tags = ['survey', 'location', 'Wild Life of Our Homes']
+        elif re.search('fungi-kit-', filename):
+            description = ('Fungi ITS-based OTU counts and taxonomic '
+                           'classifications')
+            tags = ['fungi', 'OTU', 'ITS']
+        elif re.search('bacteria-kit-', filename):
+            description = ('Bacteria 16S-based OTU counts and taxonomic '
+                           'classifications')
+            tags = ['bacteria', 'OTU', '16S']
+        temp_files += [{
+            'temp_filename': filename,
+            'tempdir': tempdir,
+            'metadata': {
+                'description': description,
+                'tags': tags,
+            }
+        }]
 
-    dataset.close()
-    if update_url and task_id:
-        dataset.update(update_url, task_id,
-                       subtype='bacterial-and-fungal-profiling')
-    return dataset
+    print 'Finished creating all datasets locally.'
+
+    for file_info in temp_files:
+        print "File info: {}".format(str(file_info))
+        filename = file_info['temp_filename']
+        file_tempdir = file_info['tempdir']
+        output_path = mv_tempfile_to_output(
+            os.path.join(file_tempdir, filename), filename, **kwargs)
+        if 's3_key_dir' in kwargs and 's3_bucket_name' in kwargs:
+            data_files.append({
+                's3_key': output_path,
+                'metadata': file_info['metadata'],
+            })
+    os.rmdir(tempdir)
+
+    print 'Finished moving all datasets to permanent storage.'
+
+    if not (task_id and update_url):
+        return
+
+    task_data = {'task_id': task_id,
+                 's3_keys': [df['s3_key'] for df in data_files],
+                 'data_files': data_files}
+    status_msg = ('Updating main site ({}) with completed files for task_id={}'
+                  ' with task_data:\n{}'.format(
+                      update_url, task_id, json.dumps(task_data)))
+    print status_msg
+    requests.post(update_url, data={'task_data': json.dumps(task_data)})

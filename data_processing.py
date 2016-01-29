@@ -26,7 +26,7 @@ from data_retrieval.pgp_harvard import create_pgpharvard_datafiles
 from data_retrieval.twenty_three_and_me import create_23andme_datafiles
 from data_retrieval.go_viral import create_go_viral_datafiles
 from data_retrieval.runkeeper import create_runkeeper_ohdatasets
-from data_retrieval.wildlife import create_wildlife_ohdataset
+from data_retrieval.wildlife import create_wildlife_datafiles
 
 app = Flask(__name__)
 
@@ -202,7 +202,7 @@ def make_runkeeper_ohdataset(**task_params):
 
 
 @celery_worker.task
-def make_wildlife_ohdataset(**task_params):
+def make_wildlife_datafiles(**task_params):
     """
     Task to initiate retrieval of American Gut data set.
 
@@ -212,7 +212,7 @@ def make_wildlife_ohdataset(**task_params):
     """
     data = task_params.pop('data')
     if 'files' in data:
-        create_wildlife_ohdataset(files=data['files'], **task_params)
+        create_wildlife_datafiles(files=data['files'], **task_params)
 
 
 # Pages to receive task requests
@@ -290,7 +290,7 @@ def wildlife():
         'data' (JSON format, expected to contain 'files')
     """
     task_params = json.loads(request.args['task_params'])
-    make_wildlife_ohdataset.delay(**task_params)
+    make_wildlife_datafiles.delay(**task_params)
     return 'Wildlife dataset started'
 
 
