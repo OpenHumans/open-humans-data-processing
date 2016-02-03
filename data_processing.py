@@ -25,7 +25,7 @@ from data_retrieval.american_gut import create_amgut_datafiles
 from data_retrieval.pgp_harvard import create_pgpharvard_datafiles
 from data_retrieval.twenty_three_and_me import create_23andme_datafiles
 from data_retrieval.go_viral import create_go_viral_datafiles
-from data_retrieval.runkeeper import create_runkeeper_ohdatasets
+from data_retrieval.runkeeper import create_runkeeper_datafiles
 from data_retrieval.wildlife import create_wildlife_datafiles
 
 app = Flask(__name__)
@@ -195,11 +195,11 @@ def make_go_viral_datafiles(**task_params):
 
 
 @celery_worker.task
-def make_runkeeper_ohdataset(**task_params):
+def make_runkeeper_datafiles(**task_params):
     """
     Task to initiate retrieval of RunKeeper data set
     """
-    create_runkeeper_ohdatasets(**task_params)
+    create_runkeeper_datafiles(**task_params)
 
 
 @celery_worker.task
@@ -279,7 +279,7 @@ def runkeeper():
         'access_token' (string, token for accessing data via RunKeeper API)
     """
     task_params = json.loads(request.args['task_params'])
-    make_runkeeper_ohdataset.delay(**task_params)
+    make_runkeeper_datafiles.delay(**task_params)
     return 'RunKeeper dataset started'
 
 

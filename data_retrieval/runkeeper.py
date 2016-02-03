@@ -26,22 +26,23 @@ from __future__ import unicode_literals
 from collections import OrderedDict
 from cStringIO import StringIO
 import csv
+from datetime import datetime, timedelta
 import json
+import os
 import sys
+import tempfile
 
 import requests
 
-from .participant_data_set import format_filename, get_dataset, OHDataSource
+from .files import mv_tempfile_to_output
 
 BACKGROUND_DATA_KEYS = ['timestamp', 'steps', 'calories_burned', 'source']
 FITNESS_SUMMARY_KEYS = ['type', 'equipment', 'start_time', 'utc_offset',
                         'total_distance', 'duration', 'total_calories',
                         'climb', 'source']
 FITNESS_PATH_KEYS = ['latitude', 'longitude', 'altitude', 'timestamp', 'type']
-FITNESS_SOCIAL_KEYS = ['share', 'share_map']
-FRIENDS_SOCIAL_KEYS = ['userID', 'status']
-SLEEP_DATA_KEYS = ['timestamp', 'total_sleep', 'deep', 'rem', 'light', 'awake',
-                   'times_woken', 'source']
+
+PAGESIZE = '10000'
 
 
 def runkeeper_query(access_token, path, content_type=None):
@@ -51,25 +52,11 @@ def runkeeper_query(access_token, path, content_type=None):
     headers = {'Authorization': 'Bearer %s' % access_token}
     if content_type:
         headers['Content-Type'] = content_type
-    data_url = 'https://api.runkeeper.com%s' % path
+    data_url = 'https://api.runkeeper.com{}'.format(path)
+    print data_url
     data_response = requests.get(data_url, headers=headers)
     data = data_response.json()
     return data
-
-
-class CSVIO(object):
-    """
-    Shorthand for making a StringIO file-like object with CSV data.
-    """
-    def __init__(self):
-        self.filehandle = StringIO()
-        self.csvwriter = csv.writer(self.filehandle)
-
-    def writerow(self, *args, **kwargs):
-        return self.csvwriter.writerow(*args, **kwargs)
-
-    def seek(self, *args, **kwargs):
-        return self.filehandle.seek(*args, **kwargs)
 
 
 def get_items(access_token, path, recurse='both'):
@@ -78,7 +65,9 @@ def get_items(access_token, path, recurse='both'):
 
     RunKeeper uses the same pages format for items in various places.
     """
+    print "PATH: {}".format(path)
     query_data = runkeeper_query(access_token, path)
+    print len(query_data['items'])
     items = query_data['items']
     if 'previous' in query_data and recurse in ['both', 'prev']:
         prev_items = get_items(
@@ -106,166 +95,110 @@ def data_for_keys(data_dict, data_keys):
     return data_out
 
 
-def get_runkeeper_data(access_token, user_data):
-    """
-    Get activity, social, and sleep data from RunKeeper for a given user.
+def yearly_items(items):
+    current_year = (datetime.now() - timedelta(days=1)).year
+    yearly_items = {}
+    complete_years = []
+    for item in items:
+        try:
+            time_string = item['start_time']
+        except KeyError:
+            time_string = item['timestamp']
+        start_time = datetime.strptime(time_string, '%a, %d %b %Y %H:%M:%S')
+        if start_time.year not in yearly_items:
+            yearly_items[start_time.year] = []
+            if start_time.year < current_year:
+                complete_years.append(start_time.year)
+        yearly_items[start_time.year].append(item)
+    return yearly_items, complete_years
 
-    Data is returned as a dict with the following format (pseudocode):
-    { 'activity_data':
-        { 'background_activities':
-            { item_uri:
-                { key: value for each of BACKGROUND_DATA_KEYS },
-              ...
-            },
-          'fitness_activities':
-            { item_uri:
-                { 'path': { key: value for each of FITNESS_PATH_KEYS },
-                  and key: value for each of the FITNESS_ACTIVITY_KEYS
-                },
-              ...
-            },
-          'userID': userID
-        }
-      'social_data':
-        { 'fitness_activity_sharing':
-            { item_uri:
-                { key: value for each of FITNESS_SOCIAL_KEYS },
-              ...
-            },
-          'friends':
-            { item_url:
-                { key: value for each of FRIENDS_SOCIAL_KEYS },
-              ...
-            },
-          'userID': userID
-        },
-      'sleep_data':
-        { 'sleep_logs':
-            { item_uri:
-                { key: value for each of SLEEP_DATA_KEYS },
-              ...
-            },
-          'user_id': userID
-        }
+
+def get_runkeeper_data(access_token, user_data, tempdir):
+    """
+    Create tempfiles with activity data from RunKeeper for a given user.
+
+    Data is split per-year, in JSON format.
+    Each JSON is an object (dict) in the following format (pseudocode):
+
+    { 'background_activities':
+        [
+          { key: value for each of BACKGROUND_DATA_KEYS },
+          { key: value for each of BACKGROUND_DATA_KEYS },
+          ...
+        ],
+      'fitness_activities':
+        [
+          { 'path': { key: value for each of FITNESS_PATH_KEYS },
+             and key: value for each of the FITNESS_ACTIVITY_KEYS },
+          { 'path': { key: value for each of FITNESS_PATH_KEYS },
+             and key: value for each of the FITNESS_ACTIVITY_KEYS },
+          ...
+        ]
     }
 
     Notes:
-        - the data for the following keys are OrderedDict objects where the
-          each key is the item URI (or URL) used to retrieve data:
-          ['activity_data']['background_activities']
-          ['activity_data']['fitness_activities']
-          ['social_data']['fitness_activity_sharing']
-          ['social_data']['friends']
-          ['sleep_data']['sleep_logs']
-          This is done to preserve order that items are listed by RunKeeper.
-
+        - items are sorted according to start_time or timestamp
         - The item_uri for fitness_activities matches item_uri in
           fitness_activity_sharing.
-
-        - As of May 2015, RunKeeper's API uses 'url' for 'friends' data instead
-          of 'uri'.
     """
-    # Initial data storage.
-    activity_data = {'fitness_activities': OrderedDict(),
-                     'background_activities': OrderedDict(),
-                     'userID': user_data['userID']}
-
+    new_temp_files = []
     # Get activity data.
-    fitness_activity_items = get_items(
-        access_token, user_data['fitness_activities'])
-    background_activity_items = get_items(
-        access_token, user_data['background_activities'])
-    # Fitness activities.
-    for item in fitness_activity_items:
-        item_data = runkeeper_query(
-            access_token,
-            item['uri'],
-            content_type='application/vnd.com.runkeeper.FitnessActivity+json')
-        # Record activity data.
-        item_activity_data = data_for_keys(item_data, FITNESS_SUMMARY_KEYS)
-        item_activity_data['path'] = [
-            data_for_keys(datapoint, FITNESS_PATH_KEYS)
-            for datapoint in item_data['path']]
-        activity_data['fitness_activities'][item['uri']] = item_activity_data
+    fitness_activity_path = '{}?pageSize={}'.format(
+        user_data['fitness_activities'], PAGESIZE)
+    fitness_activity_items, complete_fitness_activity_years = yearly_items(
+        get_items(access_token, path=fitness_activity_path))
     # Background activities.
-    for item in background_activity_items:
-        item_data = runkeeper_query(access_token, item['uri'])
-        item_bkgrnd_data = data_for_keys(item_data, BACKGROUND_DATA_KEYS)
-        activity_data['background_activities'][item['uri']] = item_bkgrnd_data
-
-    return {'activity_data': activity_data}
-
-
-def make_activity_dataset(data, filename, source, **kwargs):
-    """
-    Process activity data to create OHDataSet with JSON and CSV data files.
-    """
-    dataset = get_dataset(filename, source, **kwargs)
-    filename_base = filename.rstrip('.tar.gz')
-
-    # Store data as JSON file.
-    json_out = StringIO(json.dumps(data, indent=2, sort_keys=True) + '\n')
-    filename_json = filename_base + '.json'
-    dataset.add_file(file=json_out, name=filename_json)
-
-    # Store user ID as a text file.
-    userID_io = StringIO(str(data['userID']))
-    userID_filename = filename_base + '.userID.txt'
-    dataset.add_file(file=userID_io, name=userID_filename)
-
-    # Store background data as CSV files, if it exists.
-    if data['background_activities']:
-        background_data = data['background_activities']
-        # Format as CSV data in a StringIO file-like object.
-        csv_background = CSVIO()
-        csv_background.writerow(['uri'] + BACKGROUND_DATA_KEYS)
-        for item_uri in background_data.keys():
-            csv_background.writerow([item_uri] + [
-                background_data[item_uri][x] for x in BACKGROUND_DATA_KEYS])
-        # Add as file to the dataset.
-        csv_background.seek(0)
-        filename_csv_background = filename_base + '.background-activities.csv'
-        dataset.add_file(file=csv_background.filehandle,
-                         name=filename_csv_background)
-
-    # Store fitness activity data in a pair of CSV files, if it exists.
-    if data['fitness_activities']:
-        fitness_data = data['fitness_activities']
-        # Each fitness has summary data, and an array of GPS datapoints.
-        # Format each as CSV data in a StringIO file-like object.
-        csv_fitness_summary = CSVIO()
-        csv_fitness_summary.writerow(['uri'] + FITNESS_SUMMARY_KEYS)
-        csv_fitness_path = CSVIO()
-        # Path data includes URI for cross-reference with CSV summary data.
-        csv_fitness_path.writerow(['uri'] + FITNESS_PATH_KEYS)
-
-        # Process fitness activity data into CSV data.
-        for item_uri in fitness_data.keys():
-            csv_fitness_summary.writerow([item_uri] + [
-                fitness_data[item_uri][x] for x in FITNESS_SUMMARY_KEYS])
-            for point in fitness_data[item_uri]['path']:
-                csv_fitness_path.writerow([item_uri] + [point[x] for x in
-                                                        FITNESS_PATH_KEYS])
-
-        # Add as files to the dataset.
-        csv_fitness_summary.seek(0)
-        csv_fitness_path.seek(0)
-        filename_csv_fitness_summary = (filename_base +
-                                        '.fitness-activities-summary-data.csv')
-        filename_csv_fitness_path = (filename_base +
-                                     '.fitness-activities-path-data.csv')
-        dataset.add_file(file=csv_fitness_summary.filehandle,
-                         name=filename_csv_fitness_summary)
-        dataset.add_file(file=csv_fitness_path.filehandle,
-                         name=filename_csv_fitness_path)
-
-    return dataset
+    background_activ_path = '{}?pageSize={}'.format(
+        user_data['background_activities'], PAGESIZE)
+    background_activ_items, complete_background_activ_years = yearly_items(
+        get_items(access_token, background_activ_path))
+    all_years = sorted(set(fitness_activity_items.keys() +
+                           background_activ_items.keys()))
+    all_completed_years = set(
+        complete_fitness_activity_years + complete_background_activ_years)
+    for year in all_years:
+        outdata = {'fitness_activities': [],
+                   'background_activities': []}
+        fitness_items = sorted(
+            fitness_activity_items.get(year, []),
+            key=lambda item: datetime.strptime(
+                item['start_time'], '%a, %d %b %Y %H:%M:%S'))
+        for item in fitness_items:
+            item_data = runkeeper_query(access_token, item['uri'])
+            item_data_out = data_for_keys(item_data, FITNESS_SUMMARY_KEYS)
+            item_data_out['path'] = [
+                data_for_keys(datapoint, FITNESS_PATH_KEYS)
+                for datapoint in item_data['path']]
+            outdata['fitness_activities'].append(item_data_out)
+        background_items = sorted(
+            background_activ_items.get(year, []),
+            key=lambda item: datetime.strptime(
+                item['timestamp'], '%a, %d %b %Y %H:%M:%S'))
+        for item in background_items:
+            outdata['background_activities'].append(
+                data_for_keys(item, BACKGROUND_DATA_KEYS))
+        filename = 'Runkeeper-activity-data-{}.json'.format(str(year))
+        filepath = os.path.join(tempdir, filename)
+        with open(filepath, 'w') as f:
+            json.dump(outdata, f, indent=2, sort_keys=True)
+        new_temp_files.append({
+            'temp_filename': filename,
+            'tempdir': tempdir,
+            'metadata': {
+                'description': ('Runkeeper GPS maps and imported '
+                                'activity data.'),
+                'tags': ['GPS', 'Runkeeper'],
+                'dataYear': year,
+                'complete': year in all_completed_years,
+            }
+        })
+    return new_temp_files
 
 
-def create_runkeeper_ohdatasets(access_token,
-                                task_id=None,
-                                update_url=None,
-                                **kwargs):
+def create_runkeeper_datafiles(access_token,
+                               task_id=None,
+                               update_url=None,
+                               **kwargs):
     """
     Create Open Humans Dataset from RunKeeper API data
 
@@ -281,33 +214,41 @@ def create_runkeeper_ohdatasets(access_token,
     Either 'filedir' (and no S3 arguments), or both S3 arguments (and no
     'filedir') must be specified.
     """
+    tempdir = tempfile.mkdtemp()
+    temp_files = []
+    data_files = []
+
     user_data = runkeeper_query(access_token, '/user')
-    runkeeper_data = get_runkeeper_data(access_token, user_data)
+    temp_files += get_runkeeper_data(access_token, user_data, tempdir=tempdir)
 
-    filename_activity = format_filename(source='runkeeper',
-                                        data_type='activity-data')
-    source = OHDataSource(name='RunKeeper Health Graph API',
-                          url='http://developer.runkeeper.com/healthgraph',
-                          userID=user_data['userID'])
+    print 'Finished creating all datasets locally.'
 
-    datasets = []
+    for file_info in temp_files:
+        print "File info: {}".format(str(file_info))
+        filename = file_info['temp_filename']
+        file_tempdir = file_info['tempdir']
+        output_path = mv_tempfile_to_output(
+            os.path.join(file_tempdir, filename), filename, **kwargs)
+        if 's3_key_dir' in kwargs and 's3_bucket_name' in kwargs:
+            data_files.append({
+                's3_key': output_path,
+                'metadata': file_info['metadata'],
+            })
+    os.rmdir(tempdir)
 
-    # Make activity data file if there's activity data.
-    if (runkeeper_data['activity_data']['background_activities'] or
-            runkeeper_data['activity_data']['fitness_activities']):
-        activity_dataset = make_activity_dataset(
-            data=runkeeper_data['activity_data'],
-            filename=filename_activity,
-            source=source,
-            **kwargs)
-        activity_dataset.metadata['runkeeper_id'] = str(user_data['userID'])
-        activity_dataset.close()
-        if update_url and task_id:
-            activity_dataset.update(update_url, task_id,
-                                    subtype='activity-data')
-        datasets.append(activity_dataset)
+    print 'Finished moving all datasets to permanent storage.'
 
-    return datasets
+    if not (task_id and update_url):
+        return
+
+    task_data = {'task_id': task_id,
+                 's3_keys': [df['s3_key'] for df in data_files],
+                 'data_files': data_files}
+    status_msg = ('Updating main site ({}) with completed files for task_id={}'
+                  ' with task_data:\n{}'.format(
+                      update_url, task_id, json.dumps(task_data)))
+    print status_msg
+    requests.post(update_url, data={'task_data': json.dumps(task_data)})
 
 
 if __name__ == '__main__':
@@ -315,4 +256,4 @@ if __name__ == '__main__':
         print 'Please specify a token and directory.'
         sys.exit(1)
 
-    create_runkeeper_ohdatasets(*sys.argv[1:-1], filedir=sys.argv[-1])
+    create_runkeeper_datafiles(*sys.argv[1:-1], filedir=sys.argv[-1])
