@@ -1,7 +1,7 @@
 """
 Create data set for Wild Life of Our Homes
 
-Copyright (C) 2015 PersonalGenomes.org
+Copyright (C) 2016 PersonalGenomes.org
 
 This software is shared under the "MIT License" license (aka "Expat License"),
 see LICENSE.TXT for full license text.
@@ -13,6 +13,7 @@ import requests
 import tempfile
 
 from .files import get_remote_file, mv_tempfile_to_output
+from .visualization import wildlife as wildlife_vis
 
 
 def create_wildlife_datafiles(files,
@@ -42,28 +43,57 @@ def create_wildlife_datafiles(files,
     for filename in files:
         url = files[filename]
         filename = get_remote_file(url, tempdir)
-        description = ''
-        tags = []
+        filepath = os.path.join(tempdir, filename)
+        base_tags = ['Wild Life of Our Homes']
         if re.search('home-data-', filename):
-            description = ('Geographical and architectural information about '
-                           'residence')
-            tags = ['survey', 'location', 'Wild Life of Our Homes']
-        elif re.search('fungi-kit-', filename):
-            description = ('Fungi ITS-based OTU counts and taxonomic '
-                           'classifications')
-            tags = ['fungi', 'OTU', 'ITS']
-        elif re.search('bacteria-kit-', filename):
-            description = ('Bacteria 16S-based OTU counts and taxonomic '
-                           'classifications')
-            tags = ['bacteria', 'OTU', '16S']
-        temp_files += [{
-            'temp_filename': filename,
-            'tempdir': tempdir,
-            'metadata': {
-                'description': description,
-                'tags': tags,
-            }
-        }]
+            temp_files += [{
+                'temp_filename': filename,
+                'tempdir': tempdir,
+                'metadata': {
+                    'description': ('Geographical and architectural '
+                                    'information about residence'),
+                    'tags': ['survey', 'location'] + base_tags,
+                }
+            }]
+        elif (re.search('fungi-kit-', filename) or
+              re.search('bacteria-kit-', filename)):
+            data_tags = ['OTU'] + base_tags
+            vis_tags = ['visualization'] + base_tags
+            if re.search('bacteria-kit-', filename):
+                data_descr = ('Bacteria 16S-based OTU counts and taxonomic '
+                              'classifications')
+                data_tags = ['bacteria', '16S'] + data_tags
+                vis_descr = ('Visualization of Wild Life of Our Homes '
+                             'bacteria data')
+                vis_tags = ['bacteria'] + vis_tags
+            else:
+                data_descr = ('Fungi ITS-based OTU counts and taxonomic '
+                              'classifications')
+                data_tags = ['fungi', 'ITS'] + data_tags
+                vis_descr = ('Visualization of Wild Life of Our Homes fungi '
+                             'data')
+                vis_tags = ['fungi'] + vis_tags
+            counts = wildlife_vis.get_counts(filepath=filepath)
+            vis_filename = filename.split(".")[0] + '-graphs.png'
+            vis_filepath = os.path.join(tempdir, vis_filename)
+            wildlife_vis.make_pie_charts(counts, vis_filepath)
+            temp_files += [
+                {
+                    'temp_filename': filename,
+                    'tempdir': tempdir,
+                    'metadata': {
+                        'description': data_descr,
+                        'tags': data_tags,
+                    }
+                },
+                {
+                    'temp_filename': vis_filename,
+                    'tempdir': tempdir,
+                    'metadata': {
+                        'description': vis_descr,
+                        'tags': vis_tags,
+                    }
+                }]
 
     print 'Finished creating all datasets locally.'
 
