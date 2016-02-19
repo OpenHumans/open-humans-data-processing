@@ -22,6 +22,7 @@ from werkzeug.contrib.fixers import ProxyFix
 from celery_worker import make_worker
 
 from data_retrieval.american_gut import create_amgut_datafiles
+from data_retrieval.ancestry_dna import create_ancestrydna_datafiles
 from data_retrieval.pgp_harvard import create_pgpharvard_datafiles
 from data_retrieval.twenty_three_and_me import create_23andme_datafiles
 from data_retrieval.go_viral import create_go_viral_datafiles
@@ -157,7 +158,7 @@ def task_postrun_handler_cb(sender=None, state=None, kwargs=None,
 @celery_worker.task
 def make_23andme_datafiles(**task_params):
     """
-    Task to initiate retrieval of 23andMe data set.
+    Task to initiate proecssing of 23andMe raw data file.
     """
     file_url = task_params.pop('file_url')
     create_23andme_datafiles(file_url=file_url, sentry=sentry, **task_params)
@@ -176,6 +177,16 @@ def make_amgut_datafiles(**task_params):
     if 'surveyIds' in data:
         create_amgut_datafiles(survey_ids=data['surveyIds'],
                                sentry=sentry, **task_params)
+
+
+@celery_worker.task
+def make_ancestrydna_datafiles(**task_params):
+    """
+    Task to initiate proecssing of AncestryDNA raw data file.
+    """
+    file_url = task_params.pop('file_url')
+    create_ancestrydna_datafiles(
+        file_url=file_url, sentry=sentry, **task_params)
 
 
 @celery_worker.task
@@ -242,6 +253,19 @@ def american_gut():
     task_params = json.loads(request.args['task_params'])
     make_amgut_datafiles.delay(**task_params)
     return 'Amgut dataset started'
+
+
+@app.route('/ancestry_dna', methods=['GET', 'POST'])
+def ancestry_dna():
+    """
+    Page to receive AncestryDNA task request
+
+    'task_params' specific to this task:
+        'file_url' (string, for accessing the uploaded file)
+    """
+    task_params = json.loads(request.args['task_params'])
+    make_ancestrydna_datafiles.delay(**task_params)
+    return 'AncestryDNA dataset started'
 
 
 @app.route('/pgp', methods=['GET', 'POST'])
