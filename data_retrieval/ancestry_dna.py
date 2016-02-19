@@ -1,17 +1,16 @@
 r"""
-23andMe genotyping data extraction.
+AncestryDNA genotyping data extraction.
 
-Copyright (C) 2014 PersonalGenomes.org
+Copyright (C) 2016 PersonalGenomes.org
 
 This software is shared under the "MIT License" license (aka "Expat License"),
 see LICENSE.TXT for full license text.
 
 May be used on the command line. For example, the following command:
 
-    python -m data_retrieval.twentythree_and_me <23andme_token> \
-        <23andme_profile_id> files
+    python -m data_retrieval.ancestry_dna ~/Downloads/AncestryDNA.zip files
 
-Will assemble a data set in files/
+Will assemble processed data sets in files/
 """
 import bz2
 import gzip
@@ -179,9 +178,9 @@ def vcf_from_raw_ancestrydna(raw_ancestrydna, genome_sex):
 
 def clean_raw_ancestrydna(input_filepath, sentry=None, username=None):
     """
-    Create clean file in 23andme format from downloaded version
+    Create clean file in AncestryDNA format from downloaded version
 
-    Obsessively careful processing that ensures 23andMe file format changes
+    Obsessively careful processing that ensures AncestryDNA file format changes
     won't inadvertantly result in unexpected information, e.g. names.
     """
     error_message = ("Input file is expected to be either '.txt', '.txt.gz', "
@@ -344,7 +343,7 @@ def create_ancestrydna_datafiles(username,
     vcf_ancestrydna_unsorted = vcf_from_raw_ancestrydna(
         raw_ancestrydna, genome_sex)
 
-    # Save raw 23andMe genotyping to temp file.
+    # Save raw AncestryDNA genotyping to temp file.
     raw_filename = filename_base + '.txt'
     with open(os.path.join(tempdir, raw_filename), 'w') as raw_file:
         raw_ancestrydna.seek(0)
@@ -358,7 +357,7 @@ def create_ancestrydna_datafiles(username,
             },
         })
 
-    # Save VCF 23andMe genotyping to temp file.
+    # Save VCF AncestryDNA genotyping to temp file.
     vcf_ancestrydna_unsorted.seek(0)
     vcf_ancestrydna_sorted = sort_vcf(vcf_ancestrydna_unsorted)
     vcf_filename = filename_base + '.vcf'
