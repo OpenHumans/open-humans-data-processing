@@ -206,9 +206,9 @@ def make_ubiome_datafiles(**task_params):
     """
     Task to initiate proecssing of uBiome raw data file.
     """
-    file_url = task_params.pop('file_url')
+    samples = task_params.pop('samples')
     create_ubiome_datafiles(
-        file_url=file_url, sentry=sentry, **task_params)
+        samples=samples, sentry=sentry, **task_params)
 
 
 @celery_worker.task

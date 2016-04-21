@@ -15,7 +15,7 @@ Will assemble processed data sets in files/
 import json
 import os
 import shutil
-import sys
+# import sys
 import tempfile
 import zipfile
 
@@ -67,22 +67,17 @@ def verify_ubiome(input_filepath, sentry=None, username=None):
         raise ValueError('Input file is expected to be a ZIP archive')
 
 
-def create_ubiome_datafiles(username, input_file=None, file_url=None,
-                            task_id=None, update_url=None, sentry=None,
-                            **kwargs):
+def create_ubiome_datafiles(username, samples=None, task_id=None,
+                            update_url=None, sentry=None, **kwargs):
     """
     Create Open Humans Dataset from uploaded uBiome data.
 
     Optional arguments:
-        input_file: path to a local copy of the uploaded file
-        file_url: path to an online copy of the input file
+        samples: path to an online copy of the input file
         filedir: Local filepath, folder in which to place the resulting file.
         s3_bucket_name: S3 bucket to write resulting file.
         s3_key_dir: S3 key "directory" to write resulting file. The full S3 key
                     name will add a filename to the end of s3_key_dir.
-
-    For input: either 'input_file' or 'file_url' must be specified.
-    (The first is a path to a local file, the second is a URL to a remote one.)
 
     For output: iither 'filedir' (and no S3 arguments), or both
     's3_bucket_name' and 's3_key_dir' (and no 'filedir') must be specified.
@@ -91,50 +86,49 @@ def create_ubiome_datafiles(username, input_file=None, file_url=None,
     temp_files = []
     data_files = []
 
-    if file_url and not input_file:
-        filename = get_remote_file(file_url, tempdir)
+    if not samples:
+        raise Exception('`samples` parameter missing')
+
+    for sample in samples:
+        filename = get_remote_file(sample['sequence_file']['url'], tempdir)
         input_file = os.path.join(tempdir, filename)
-    elif input_file and not file_url:
-        pass
-    else:
-        raise Exception('Run with either input_file, or file_url')
 
-    verify_ubiome(input_file, sentry, username)
+        verify_ubiome(input_file, sentry, username)
 
-    shutil.copyfile(input_file, os.path.join(tempdir, 'uBiome-fastq.zip'))
+        shutil.copyfile(input_file, os.path.join(tempdir, 'uBiome-fastq.zip'))
 
-    temp_files.append({
-        'temp_filename': 'uBiome-fastq.zip',
-        'tempdir': tempdir,
-        'metadata': {
-            'description': 'uBiome data, original format',
-            'tags': ['uBiome', 'FASTQ'],
-        },
-    })
+        temp_files.append({
+            'temp_filename': 'uBiome-fastq.zip',
+            'tempdir': tempdir,
+            'metadata': {
+                'description': 'uBiome data, original format',
+                'tags': ['uBiome', 'FASTQ'],
+            },
+        })
 
-    print 'Finished creating all datasets locally.'
+        print 'Finished creating all datasets locally.'
 
-    for file_info in temp_files:
-        print 'File info: {}'.format(str(file_info))
+        for file_info in temp_files:
+            print 'File info: {}'.format(str(file_info))
 
-        filename = file_info['temp_filename']
-        file_tempdir = file_info['tempdir']
+            filename = file_info['temp_filename']
+            file_tempdir = file_info['tempdir']
 
-        output_path = mv_tempfile_to_output(
-            os.path.join(file_tempdir, filename), filename, **kwargs)
+            output_path = mv_tempfile_to_output(
+                os.path.join(file_tempdir, filename), filename, **kwargs)
 
-        if 's3_key_dir' in kwargs and 's3_bucket_name' in kwargs:
-            data_files.append({
-                's3_key': output_path,
-                'metadata': file_info['metadata'],
-            })
+            if 's3_key_dir' in kwargs and 's3_bucket_name' in kwargs:
+                data_files.append({
+                    's3_key': output_path,
+                    'metadata': file_info['metadata'],
+                })
 
-    if file_url:
-        os.remove(input_file)
+        if samples:
+            os.remove(input_file)
 
-    os.rmdir(tempdir)
+        os.rmdir(tempdir)
 
-    print 'Finished moving all datasets to permanent storage.'
+        print 'Finished moving all datasets to permanent storage.'
 
     if not (task_id and update_url):
         return
@@ -148,12 +142,12 @@ def create_ubiome_datafiles(username, input_file=None, file_url=None,
     requests.post(update_url, data={'task_data': json.dumps(task_data)})
 
 
-if __name__ == '__main__':
-    if len(sys.argv) != 4:
-        print ('Please specify a remote file URL, target local directory, '
-               'and username.')
+# if __name__ == '__main__':
+#     if len(sys.argv) != 4:
+#         print ('Please specify a remote file URL, target local directory, '
+#                'and username.')
 
-        sys.exit(1)
+#         sys.exit(1)
 
-    create_ubiome_datafiles(input_file=sys.argv[1], filedir=sys.argv[2],
-                            username=sys.argv[3])
+#     create_ubiome_datafiles(input_file=sys.argv[1], filedir=sys.argv[2],
+#                             username=sys.argv[3])
