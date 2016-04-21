@@ -27,6 +27,7 @@ from data_retrieval.go_viral import create_go_viral_datafiles
 from data_retrieval.mpower import create_mpower_datafiles
 from data_retrieval.pgp_harvard import create_pgpharvard_datafiles
 from data_retrieval.runkeeper import create_runkeeper_datafiles
+from data_retrieval.ubiome import create_ubiome_datafiles
 from data_retrieval.twenty_three_and_me import create_23andme_datafiles
 from data_retrieval.wildlife import create_wildlife_datafiles
 
@@ -201,6 +202,16 @@ def make_mpower_datafiles(**task_params):
 
 
 @celery_worker.task
+def make_ubiome_datafiles(**task_params):
+    """
+    Task to initiate proecssing of uBiome raw data file.
+    """
+    file_url = task_params.pop('file_url')
+    create_ubiome_datafiles(
+        file_url=file_url, sentry=sentry, **task_params)
+
+
+@celery_worker.task
 def make_pgpharvard_datafiles(**task_params):
     """
     Task to initiate retrieval of PGP Harvard data set
@@ -277,6 +288,19 @@ def ancestry_dna():
     task_params = json.loads(request.args['task_params'])
     make_ancestrydna_datafiles.delay(**task_params)
     return 'AncestryDNA dataset started'
+
+
+@app.route('/ubiome', methods=['GET', 'POST'])
+def ubiome():
+    """
+    Page to receive uBiome task request
+
+    'task_params' specific to this task:
+        'file_url' (string, for accessing the uploaded file)
+    """
+    task_params = json.loads(request.args['task_params'])
+    make_ubiome_datafiles.delay(**task_params)
+    return 'uBiome dataset started'
 
 
 @app.route('/mpower', methods=['GET', 'POST'])
