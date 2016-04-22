@@ -47,7 +47,7 @@ def verify_ubiome(input_filepath, sentry=None, username=None):
         zip_file = zipfile.ZipFile(input_filepath)
 
         file_list = [f for f in zip_file.namelist()
-                     if not f.startswith('__MACOSX/') and not f.endswith('/')]
+                     if not f.startswith('__MACOSX/')]
 
         for filename in file_list:
             if not filename.endswith('.fastq.gz'):
