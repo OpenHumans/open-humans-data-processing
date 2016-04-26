@@ -354,7 +354,7 @@ def create_pgpharvard_datafiles(huID,
                 's3_key': output_path,
                 'metadata': file_info['metadata'],
             })
-    os.rmdir(tempdir)
+    shutil.rmtree(tempdir)
 
     print 'Finished moving all datasets to permanent storage.'
 
