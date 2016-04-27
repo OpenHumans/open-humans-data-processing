@@ -166,8 +166,7 @@ def vcf_from_var(vcf_filename, tempdir, var_filepath):
     vcf_filepath = os.path.join(tempdir, vcf_filename)
     # Determine local storage directory
     storage_dir = os.path.join(
-        os.path.dirname(os.path.realpath(__file__)),
-        '..', 'resource_files')
+        os.path.dirname(os.path.realpath(__file__)), 'resources')
     reference, twobit_name = cgivar2gvcf.get_reference_genome_file(
         refseqdir=storage_dir, build='b37')
     # TODO: Mock this for performing tests. This is extremely slow.
