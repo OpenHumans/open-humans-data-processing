@@ -4,9 +4,14 @@
 Flask app to run data retrieval tasks for Open Humans
 """
 
+import imp
 import json
 import logging
 import os
+import pkgutil
+import sys
+
+from functools import partial
 
 import requests
 
@@ -21,20 +26,23 @@ from werkzeug.contrib.fixers import ProxyFix
 
 from celery_worker import make_worker
 
-from data_retrieval.american_gut import create_amgut_datafiles
-from data_retrieval.ancestry_dna import create_ancestrydna_datafiles
-from data_retrieval.go_viral import create_go_viral_datafiles
-from data_retrieval.mpower import create_mpower_datafiles
-from data_retrieval.pgp_harvard import create_pgpharvard_datafiles
-from data_retrieval.runkeeper import create_runkeeper_datafiles
-from data_retrieval.ubiome import create_ubiome_datafiles
-from data_retrieval.twenty_three_and_me import create_23andme_datafiles
-from data_retrieval.wildlife import create_wildlife_datafiles
-
 app = Flask(__name__)
 
 DEBUG = os.getenv('DEBUG', False)
 PORT = os.getenv('PORT', 5000)
+
+# A mapping of name/source argument pairs to send to the create_datafiles
+# method
+EXTRA_DATA = {
+    'american_gut': {
+        'survey_ids': 'surveyIds',
+    },
+    'wildlife': {
+        'files': 'files',
+    },
+}
+
+DATAFILES = {}
 
 logging.basicConfig(level=logging.DEBUG if DEBUG else logging.INFO)
 logging.info('Starting data-processing')
@@ -80,6 +88,7 @@ def make_task_data(task_id, task_state):
     Format task data for the Open Humans update endpoint.
     """
     return {
+        # TODO: just post JSON data
         'task_data': json.dumps({
             'task_id': task_id,
             'task_state': task_state,
@@ -106,11 +115,15 @@ def task_sent_handler_cb(sender=None, body=None, **other_kwargs):
     if sender == 'data_processing.task_update':
         return
 
-    logging.debug('after_task_publish sender: %s', sender)
     logging.debug('after_task_publish body: %s', debug_json(body))
 
-    update_url = body['kwargs']['update_url']
-    task_data = make_task_data(body['kwargs']['task_id'], 'QUEUED')
+    update_url = body['kwargs'].get('update_url')
+    task_id = body['kwargs'].get('task_id')
+
+    if not update_url or not task_id:
+        return
+
+    task_data = make_task_data(task_id, 'QUEUED')
 
     logging.info('Scheduling after_task_publish update')
 
@@ -125,11 +138,15 @@ def task_prerun_handler_cb(sender=None, kwargs=None, **other_kwargs):
     if sender == task_update:
         return
 
-    logging.debug('task_prerun sender: %s', sender)
     logging.debug('task_prerun kwargs: %s', debug_json(kwargs))
 
-    update_url = kwargs['update_url']
-    task_data = make_task_data(kwargs['task_id'], 'INITIATED')
+    update_url = kwargs.get('update_url')
+    task_id = kwargs.get('task_id')
+
+    if not update_url or not task_id:
+        return
+
+    task_data = make_task_data(task_id, 'INITIATED')
 
     logging.info('Scheduling task_prerun update')
 
@@ -145,232 +162,75 @@ def task_postrun_handler_cb(sender=None, state=None, kwargs=None,
     if sender == task_update:
         return
 
-    logging.debug('task_postrun sender: %s', sender)
     logging.debug('task_postrun kwargs: %s', debug_json(kwargs))
 
-    update_url = kwargs['update_url']
-    task_data = make_task_data(kwargs['task_id'], state)
+    update_url = kwargs.get('update_url')
+    task_id = kwargs.get('task_id')
+
+    if not update_url or not task_id:
+        return
+
+    task_data = make_task_data(task_id, state)
 
     logging.info('Scheduling task_postrun update')
 
     task_update.apply_async(args=[update_url, task_data], queue='priority')
 
 
-# Celery tasks
-@celery_worker.task
-def make_23andme_datafiles(**task_params):
+def load_sources():
     """
-    Task to initiate proecssing of 23andMe raw data file.
+    A generator that iterates and loads all of the modules in the sources/
+    directory.
     """
-    file_url = task_params.pop('file_url')
-    create_23andme_datafiles(file_url=file_url, sentry=sentry, **task_params)
+    source_path = [os.path.join(sys.path[0], 'sources')]
 
+    for _, name, _ in pkgutil.iter_modules(source_path):
+        f, pathname, desc = imp.find_module(name, source_path)
 
-@celery_worker.task
-def make_amgut_datafiles(**task_params):
-    """
-    Task to initiate retrieval of American Gut data set.
-
-    Data retrieval is based on the survey IDs, which American Gut pushes
-    to Open Humans as an object in the generic 'data' field, e.g.:
-    { 'surveyIds': [ '614a55f251eb12ec' ] }
-    """
-    data = task_params.pop('data')
-    if 'surveyIds' in data:
-        create_amgut_datafiles(survey_ids=data['surveyIds'],
-                               sentry=sentry, **task_params)
+        yield (name, imp.load_module(name, f, pathname, desc))
 
 
 @celery_worker.task
-def make_ancestrydna_datafiles(**task_params):
+def datafiles_task(name, **task_params):
     """
-    Task to initiate proecssing of AncestryDNA raw data file.
+    A Celery task that runs a create_datafiles method and applies the argument
+    mappings from EXTRA_DATA.
     """
-    file_url = task_params.pop('file_url')
-    create_ancestrydna_datafiles(
-        file_url=file_url, sentry=sentry, **task_params)
+    mapping = EXTRA_DATA.get(name)
+
+    if mapping:
+        for key, value in mapping.items():
+            if value not in task_params['data']:
+                return
+
+            task_params[key] = task_params['data'][value]
+
+    DATAFILES[name](sentry=sentry, **task_params)
 
 
-@celery_worker.task
-def make_mpower_datafiles(**task_params):
-    """
-    Task to initiate proecssing of mPower raw data file.
-    """
-    file_url = task_params.pop('file_url')
-    create_mpower_datafiles(
-        file_url=file_url, sentry=sentry, **task_params)
+def generic_handler(name):
+    # TODO: have open-humans post JSON data
+    datafiles_task.delay(name, **json.loads(request.args['task_params']))
+
+    return '{} dataset started'.format(name)
 
 
-@celery_worker.task
-def make_ubiome_datafiles(**task_params):
-    """
-    Task to initiate proecssing of uBiome raw data file.
-    """
-    samples = task_params.pop('samples')
-    create_ubiome_datafiles(
-        samples=samples, sentry=sentry, **task_params)
+def add_rules():
+    for name, source in load_sources():
+        DATAFILES[name] = source.create_datafiles
 
-
-@celery_worker.task
-def make_pgpharvard_datafiles(**task_params):
-    """
-    Task to initiate retrieval of PGP Harvard data set
-    """
-    create_pgpharvard_datafiles(sentry=sentry, **task_params)
-
-
-@celery_worker.task
-def make_go_viral_datafiles(**task_params):
-    """
-    Task to initiate retrieval of GoViral data set
-    """
-    create_go_viral_datafiles(sentry=sentry, **task_params)
-
-
-@celery_worker.task
-def make_runkeeper_datafiles(**task_params):
-    """
-    Task to initiate retrieval of RunKeeper data set
-    """
-    create_runkeeper_datafiles(**task_params)
-
-
-@celery_worker.task
-def make_wildlife_datafiles(**task_params):
-    """
-    Task to initiate retrieval of American Gut data set.
-
-    Data retrieval is based on the survey IDs, which American Gut pushes
-    to Open Humans as an object in the generic 'data' field, e.g.:
-    { 'surveyIds': [ '614a55f251eb12ec' ] }
-    """
-    data = task_params.pop('data')
-    if 'files' in data:
-        create_wildlife_datafiles(files=data['files'], sentry=sentry,
-                                  **task_params)
-
-
-# Pages to receive task requests
-@app.route('/twenty_three_and_me', methods=['GET', 'POST'])
-def twenty_three_and_me():
-    """
-    Page to receive 23andme task request
-
-    'task_params' specific to this task:
-        'file_url' (string, for accessing the uploaded file)
-    """
-    task_params = json.loads(request.args['task_params'])
-    make_23andme_datafiles.delay(**task_params)
-    return '23andMe dataset started'
-
-
-@app.route('/american_gut', methods=['GET', 'POST'])
-def american_gut():
-    """
-    Page to receive American Gut task request
-
-    'task_params' specific to this task:
-        'data' (JSON format, must contain 'surveyIDs')
-    """
-    task_params = json.loads(request.args['task_params'])
-    make_amgut_datafiles.delay(**task_params)
-    return 'Amgut dataset started'
-
-
-@app.route('/ancestry_dna', methods=['GET', 'POST'])
-def ancestry_dna():
-    """
-    Page to receive AncestryDNA task request
-
-    'task_params' specific to this task:
-        'file_url' (string, for accessing the uploaded file)
-    """
-    task_params = json.loads(request.args['task_params'])
-    make_ancestrydna_datafiles.delay(**task_params)
-    return 'AncestryDNA dataset started'
-
-
-@app.route('/ubiome', methods=['GET', 'POST'])
-def ubiome():
-    """
-    Page to receive uBiome task request
-
-    'task_params' specific to this task:
-        'file_url' (string, for accessing the uploaded file)
-    """
-    task_params = json.loads(request.args['task_params'])
-    make_ubiome_datafiles.delay(**task_params)
-    return 'uBiome dataset started'
-
-
-@app.route('/mpower', methods=['GET', 'POST'])
-def mpower():
-    """
-    Page to receive mPower task request
-
-    'task_params' specific to this task:
-        'file_url' (string, for accessing the uploaded file)
-    """
-    task_params = json.loads(request.args['task_params'])
-    make_mpower_datafiles.delay(**task_params)
-    return 'mPower dataset started'
-
-
-@app.route('/pgp', methods=['GET', 'POST'])
-def pgp_harvard():
-    """
-    Page to receive PGP Harvard task request
-
-    'task_params' specific to this task:
-        'huID' (string with PGP ID, eg 'hu1A2B3C')
-    """
-    task_params = json.loads(request.args['task_params'])
-    make_pgpharvard_datafiles.delay(**task_params)
-    return 'PGP Harvard dataset started'
-
-
-@app.route('/go_viral', methods=['GET', 'POST'])
-def go_viral():
-    """
-    Page to receive GoViral task request
-
-    'task_params' specific to this task:
-        'go_viral_id' (string with GoViral ID)
-    """
-    task_params = json.loads(request.args['task_params'])
-    make_go_viral_datafiles.delay(**task_params)
-    return 'GoViral dataset started'
-
-
-@app.route('/runkeeper', methods=['GET', 'POST'])
-def runkeeper():
-    """
-    Page to receive RunKeeper task request
-
-    'task_params' specific to this task:
-        'access_token' (string, token for accessing data via RunKeeper API)
-    """
-    task_params = json.loads(request.args['task_params'])
-    make_runkeeper_datafiles.delay(**task_params)
-    return 'RunKeeper dataset started'
-
-
-@app.route('/wildlife', methods=['GET', 'POST'])
-def wildlife():
-    """
-    Page to receive Wild Life of Our Homes task request
-
-    'task_params' specific to this task:
-        'data' (JSON format, expected to contain 'files')
-    """
-    task_params = json.loads(request.args['task_params'])
-    make_wildlife_datafiles.delay(**task_params)
-    return 'Wildlife dataset started'
+        app.add_url_rule('/{}/'.format(name),
+                         name,
+                         partial(generic_handler, name),
+                         methods=['GET', 'POST'])
 
 
 @app.route('/', methods=['GET', 'POST'])
-def main_page():
+def index():
     """
-    Main page for the app.
+    Main page for the app, primarily to give Pingdom something to monitor.
     """
     return 'Open Humans Data Processing'
+
+
+add_rules()

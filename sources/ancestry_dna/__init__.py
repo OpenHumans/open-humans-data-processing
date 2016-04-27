@@ -12,12 +12,12 @@ May be used on the command line. For example, the following command:
 
 Will assemble processed data sets in files/
 """
+
 import bz2
 import gzip
 import json
 import os
 import re
-import requests
 import shutil
 import sys
 import tempfile
@@ -26,13 +26,15 @@ import zipfile
 from cStringIO import StringIO
 from datetime import date, datetime
 
+import requests
+
 from boto.s3.connection import S3Connection
 
-from .files import get_remote_file, mv_tempfile_to_output
-from .sort_vcf import sort_vcf
+from data_retrieval.files import get_remote_file, mv_tempfile_to_output
+from data_retrieval.sort_vcf import sort_vcf
 
 REF_ANCESTRYDNA_FILE = os.path.join(
-    os.path.dirname(__file__), 'ancestry-dna', 'reference_b37.txt')
+    os.path.dirname(__file__), 'reference_b37.txt')
 
 # Was used to generate reference genotypes in the previous file.
 REFERENCE_GENOME_URL = ('http://hgdownload-test.cse.ucsc.edu/' +
@@ -71,6 +73,7 @@ CHROM_MAP = {
     '24': 'Y',
     '25': 'X',
 }
+
 
 def s3_connection():
     """
@@ -156,7 +159,7 @@ def vcf_from_raw_ancestrydna(raw_ancestrydna, genome_sex):
         # Figure out the alternate alleles.
         alt_alleles = []
         for alle in alleles:
-            if not alle == vcf_data['REF'] and alle not in alt_alleles:
+            if alle != vcf_data['REF'] and alle not in alt_alleles:
                 alt_alleles.append(alle)
         if alt_alleles:
             vcf_data['ALT'] = ','.join(alt_alleles)
@@ -186,12 +189,14 @@ def clean_raw_ancestrydna(input_filepath, sentry=None, username=None):
     error_message = ("Input file is expected to be either '.txt', '.txt.gz', "
                      "'.txt.bz2', or a single '.txt' file in a '.zip' ZIP "
                      'archive.')
+
     if input_filepath.endswith('.zip'):
         zipancestrydna = zipfile.ZipFile(input_filepath)
         zipfilelist = [f for f in zipancestrydna.namelist() if not
                        f.startswith('__MACOSX/')]
         if len(zipfilelist) != 1:
             raise ValueError(error_message)
+
         inputfile = zipancestrydna.open(zipfilelist[0])
     elif input_filepath.endswith('.txt.gz'):
         inputfile = gzip.open(input_filepath)
@@ -240,7 +245,7 @@ def clean_raw_ancestrydna(input_filepath, sentry=None, username=None):
         "#of the SNP using human reference build 37.1 coordinates.  Columns four and five \r\n",
         "#contain the two alleles observed at this SNP (genotype).  The genotype is reported \r\n",
         "#on the forward (+) strand with respect to the human reference.\r\n",
-        ]
+    ]
 
     next_line = inputfile.next()
     header_p_lines = []
@@ -254,9 +259,9 @@ def clean_raw_ancestrydna(input_filepath, sentry=None, username=None):
                 output.write(line)
     else:
         if sentry:
-            sentry_msg = 'AncestryDNA header did not conform to expected format.'
+            sentry_msg = "AncestryDNA header didn't match expected format."
             if username:
-                sentry_msg = sentry_msg + " Username: {}".format(username)
+                sentry_msg = sentry_msg + ' Username: {}'.format(username)
             sentry.captureMessage(sentry_msg)
 
     data_header = next_line
@@ -274,16 +279,24 @@ def clean_raw_ancestrydna(input_filepath, sentry=None, username=None):
     genome_sex = 'Female'
     called_Y = 0
     reported_Y = 0
+
+    LINE_RE = re.compile(
+        r'(rs|VGXS)[0-9]+\t[1-9][0-9]?\t[0-9]+\t[ACGT0]\t[ACGT0]')
+    REPORTED_Y = re.compile(r'(rs|VGXS)[0-9]+\t24\t[0-9]+\t[ACGT0]\t[ACGT0]')
+    CALLED_Y = re.compile(r'(rs|VGXS)[0-9]+\t24\t[0-9]+\t[ACGT]\t[ACGT]')
+
     while next_line:
-        if re.match(r'(rs|VGXS)[0-9]+\t[1-9][0-9]?\t[0-9]+\t[ACGT0]\t[ACGT0]', next_line):
-            if re.match(r'(rs|VGXS)[0-9]+\t24\t[0-9]+\t[ACGT0]\t[ACGT0]', next_line):
+        if LINE_RE.match(next_line):
+            if REPORTED_Y.match(next_line):
                 reported_Y += 1
-                if re.match(r'(rs|VGXS)[0-9]+\t24\t[0-9]+\t[ACGT]\t[ACGT]', next_line):
+
+                if CALLED_Y.match(next_line):
                     called_Y += 1
+
             output.write(next_line)
         else:
             bad_format = True
-            print "BAD FORMAT:\n{}".format(next_line)
+            print 'BAD FORMAT:\n{}'.format(next_line)
         try:
             next_line = inputfile.next()
         except StopIteration:
@@ -292,7 +305,7 @@ def clean_raw_ancestrydna(input_filepath, sentry=None, username=None):
     if bad_format and sentry:
         sentry_msg = 'AncestryDNA body did not conform to expected format.'
         if username:
-            sentry_msg = sentry_msg + " Username: {}".format(username)
+            sentry_msg = sentry_msg + ' Username: {}'.format(username)
         sentry.captureMessage(sentry_msg)
 
     if called_Y * 1.0 / reported_Y > 0.5:
@@ -300,13 +313,8 @@ def clean_raw_ancestrydna(input_filepath, sentry=None, username=None):
     return output, genome_sex
 
 
-def create_ancestrydna_datafiles(username,
-                                 input_file=None,
-                                 file_url=None,
-                                 task_id=None,
-                                 update_url=None,
-                                 sentry=None,
-                                 **kwargs):
+def create_datafiles(username, input_file=None, file_url=None, task_id=None,
+                     update_url=None, sentry=None, **kwargs):
     """Create Open Humans Dataset from uploaded AncestryDNA genotyping data
 
     Optional arguments:
@@ -352,7 +360,8 @@ def create_ancestrydna_datafiles(username,
             'temp_filename': raw_filename,
             'tempdir': tempdir,
             'metadata': {
-                'description': "AncestryDNA full genotyping data, original format",
+                'description':
+                    'AncestryDNA full genotyping data, original format',
                 'tags': ['AncestryDNA', 'genotyping'],
             },
         })
@@ -368,7 +377,7 @@ def create_ancestrydna_datafiles(username,
             'temp_filename': vcf_filename,
             'tempdir': tempdir,
             'metadata': {
-                'description': "AncestryDNA full genotyping data, VCF format",
+                'description': 'AncestryDNA full genotyping data, VCF format',
                 'tags': ['AncestryDNA', 'genotyping', 'vcf'],
             },
         })
@@ -376,7 +385,7 @@ def create_ancestrydna_datafiles(username,
     print 'Finished creating all datasets locally.'
 
     for file_info in temp_files:
-        print "File info: {}".format(str(file_info))
+        print 'File info: {}'.format(str(file_info))
         filename = file_info['temp_filename']
         file_tempdir = file_info['tempdir']
         output_path = mv_tempfile_to_output(
@@ -407,7 +416,10 @@ def create_ancestrydna_datafiles(username,
 
 if __name__ == '__main__':
     if len(sys.argv) != 4:
-        print 'Please specify a remote file URL, target local directory, and username.'
+        print ('Please specify a remote file URL, target local directory, '
+               'and username.')
+
         sys.exit(1)
 
-    create_ancestrydna_datafiles(input_file=sys.argv[1], filedir=sys.argv[2], username=sys.argv[3])
+    create_datafiles(input_file=sys.argv[1], filedir=sys.argv[2],
+                     username=sys.argv[3])

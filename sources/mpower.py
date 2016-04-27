@@ -12,6 +12,7 @@ May be used on the command line. For example, the following command:
 
 Will assemble processed data sets in files/
 """
+
 import json
 import os
 import shutil
@@ -23,7 +24,7 @@ import requests
 
 from boto.s3.connection import S3Connection
 
-from .files import get_remote_file, mv_tempfile_to_output
+from data_retrieval.files import get_remote_file, mv_tempfile_to_output
 
 
 def s3_connection():
@@ -67,9 +68,8 @@ def verify_mpower(input_filepath, sentry=None, username=None):
         raise ValueError('Input file is expected to be a ZIP archive')
 
 
-def create_mpower_datafiles(username, input_file=None, file_url=None,
-                            task_id=None, update_url=None, sentry=None,
-                            **kwargs):
+def create_datafiles(username, input_file=None, file_url=None, task_id=None,
+                     update_url=None, sentry=None, **kwargs):
     """
     Create Open Humans Dataset from uploaded mPower data.
 
@@ -155,5 +155,5 @@ if __name__ == '__main__':
 
         sys.exit(1)
 
-    create_mpower_datafiles(input_file=sys.argv[1], filedir=sys.argv[2],
-                            username=sys.argv[3])
+    create_datafiles(input_file=sys.argv[1], filedir=sys.argv[2],
+                     username=sys.argv[3])

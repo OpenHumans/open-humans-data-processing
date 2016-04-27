@@ -6,6 +6,7 @@ Copyright (C) 2016 PersonalGenomes.org
 This software is shared under the "MIT License" license (aka "Expat License"),
 see LICENSE.TXT for full license text.
 """
+
 import json
 import os
 import sys
@@ -13,7 +14,7 @@ import tempfile
 
 import requests
 
-from .files import mv_tempfile_to_output
+from data_retrieval.files import mv_tempfile_to_output
 
 GO_VIRAL_DATA_URL = 'https://www.goviralstudy.com/participants/{}/data'
 
@@ -67,12 +68,8 @@ def handle_go_viral_data(data, tempdir):
     }]
 
 
-def create_go_viral_datafiles(access_token,
-                              go_viral_id,
-                              task_id=None,
-                              update_url=None,
-                              sentry=None,
-                              **kwargs):
+def create_datafiles(access_token, go_viral_id, task_id=None, update_url=None,
+                     sentry=None, **kwargs):
     """
     Create a GoViral dataset for the given ID.
 
@@ -105,7 +102,7 @@ def create_go_viral_datafiles(access_token,
     print 'Finished creating all datasets locally.'
 
     for file_info in temp_files:
-        print "File info: {}".format(str(file_info))
+        print 'File info: {}'.format(str(file_info))
         filename = file_info['temp_filename']
         file_tempdir = file_info['tempdir']
         output_path = mv_tempfile_to_output(
@@ -138,4 +135,4 @@ if __name__ == '__main__':
 
         sys.exit(1)
 
-    create_go_viral_datafiles(*sys.argv[1:-1], filedir=sys.argv[3])
+    create_datafiles(*sys.argv[1:-1], filedir=sys.argv[3])

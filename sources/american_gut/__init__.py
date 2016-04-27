@@ -26,11 +26,10 @@ import requests
 
 from bs4 import BeautifulSoup
 
-from .files import get_remote_file, mv_tempfile_to_output
+from data_retrieval.files import get_remote_file, mv_tempfile_to_output
 
 SURVEYID_TO_SAMPACC_FILE = os.path.join(
     os.path.dirname(__file__),
-    'american-gut',
     'survey_id_to_sample_accession.json')
 
 ENA_STUDY_ACCESSIONS = ['ERP012803']
@@ -145,7 +144,7 @@ def dict_list_as_tsv(list_of_dicts):
     output = '\t'.join([re.sub('\t', '    ', x) for x in header]) + '\n'
     for dict_item in list_of_dicts:
         output += '\t'.join([re.sub('\t', '    ', dict_item[x]) for
-                            x in header]) + '\n'
+                             x in header]) + '\n'
     return output
 
 
@@ -211,11 +210,8 @@ def handle_ena_metadata(ena_metadata, tempdir, filename_base, source):
     return temp_files
 
 
-def create_amgut_datafiles(survey_ids,
-                           task_id=None,
-                           update_url=None,
-                           sentry=None,
-                           **kwargs):
+def create_datafiles(survey_ids, task_id=None, update_url=None, sentry=None,
+                     **kwargs):
     """
     Create a dataset from a set of American Gut survey IDs.
 
@@ -276,7 +272,7 @@ def create_amgut_datafiles(survey_ids,
             # run, e.g. if the first run had unsatisfactory quality.
             for ena_info_item in ena_info:
                 fastq_url = 'http://' + ena_info_item['fastq_ftp']
-                print "Retrieving file from: {}".format(fastq_url)
+                print 'Retrieving file from: {}'.format(fastq_url)
                 fastq_filename = filename_base + '-run-{}.fastq'.format(
                     ena_info_item['run_accession'])
                 orig_filename = get_remote_file(fastq_url, tempdir)
@@ -292,8 +288,8 @@ def create_amgut_datafiles(survey_ids,
                     'temp_filename': new_fn,
                     'tempdir': tempdir,
                     'metadata': {
-                        'description': ('American Gut 16S FASTQ raw sequencing '
-                                        'data.'),
+                        'description': ('American Gut 16S FASTQ raw '
+                                        'sequencing data.'),
                         'tags': ['fastq', 'American Gut', '16S'],
                         'sourceURL': fastq_url,
                         'originalFilename': orig_filename,
@@ -303,7 +299,7 @@ def create_amgut_datafiles(survey_ids,
     print 'Finished creating all datasets locally.'
 
     for file_info in temp_files:
-        print "File info: {}".format(str(file_info))
+        print 'File info: {}'.format(str(file_info))
         filename = file_info['temp_filename']
         file_tempdir = file_info['tempdir']
         output_path = mv_tempfile_to_output(
@@ -335,4 +331,4 @@ if __name__ == '__main__':
         print 'Please specify a survey ID and directory.'
         sys.exit(1)
 
-    create_amgut_datafiles(survey_ids=[sys.argv[1]], filedir=sys.argv[2])
+    create_datafiles(survey_ids=[sys.argv[1]], filedir=sys.argv[2])
