@@ -57,8 +57,8 @@ def get_remote_file(url, tempdir):
     Get and save a remote file to temporary directory. Return filename used.
     """
     req = requests.get(url, stream=True)
-    if not req.status_code == 200:
-        msg = ('File URL not working! Data processing aborted: {}'.format(url))
+    if req.status_code != 200:
+        msg = 'File URL not working! Data processing aborted: {}'.format(url)
         raise Exception(msg)
     orig_filename = ''
     if 'Content-Disposition' in req.headers:
@@ -92,6 +92,6 @@ def mv_tempfile_to_output(filepath, filename, **kwargs):
         output_path = os.path.join(kwargs['filedir'], filename)
         shutil.copy(filepath, output_path)
     else:
-        raise ValueError("Must specify S3 key & bucket, or local filedir.")
+        raise ValueError('Must specify S3 key & bucket, or local filedir.')
     os.remove(filepath)
     return output_path

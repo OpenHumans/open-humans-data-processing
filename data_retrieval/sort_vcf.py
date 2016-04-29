@@ -120,12 +120,10 @@ def sort_vcf(input_file):
     sortingfile.seek(0)
     sort_proc = subprocess.Popen(['sort', '-k', '1n,1', '-k', '3n,3'],
                                  stdin=sortingfile,
-                                 stdout=subprocess.PIPE,
-                                 )
+                                 stdout=subprocess.PIPE)
     cut_proc = subprocess.Popen(['cut', '-f', '2-'],
                                 stdin=sort_proc.stdout,
-                                stdout=subprocess.PIPE,
-                                )
+                                stdout=subprocess.PIPE)
     for line in cut_proc.stdout:
         outputfile.write(line)
     outputfile.seek(0)
