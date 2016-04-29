@@ -208,7 +208,7 @@ def datafiles_task(name, **task_params):
 
 
 def generic_handler(name):
-    logging.debug('POST JSON: %s', debug_json(request.json))
+    logging.info('POST JSON: %s', debug_json(request.json))
 
     datafiles_task.delay(name, **request.json['task_params'])
 
