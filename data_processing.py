@@ -88,11 +88,10 @@ def make_task_data(task_id, task_state):
     Format task data for the Open Humans update endpoint.
     """
     return {
-        # TODO: just post JSON data
-        'task_data': json.dumps({
+        'task_data': {
             'task_id': task_id,
             'task_state': task_state,
-        })
+        }
     }
 
 
@@ -104,7 +103,7 @@ def task_update(update_url, task_data):
     """
     logging.info('Sending queued update')
 
-    requests.post(update_url, data=task_data)
+    requests.post(update_url, json=task_data)
 
 
 @after_task_publish.connect
@@ -209,8 +208,7 @@ def datafiles_task(name, **task_params):
 
 
 def generic_handler(name):
-    # TODO: have open-humans post JSON data
-    datafiles_task.delay(name, **json.loads(request.values['task_params']))
+    datafiles_task.delay(name, **request.json['task_params'])
 
     return '{} dataset started'.format(name)
 
