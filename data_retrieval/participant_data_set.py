@@ -419,9 +419,11 @@ class S3OHDataSet(OHDataSet):
         task_data = {'task_id': task_id, 's3_keys': [self.s3_key_name]}
         status_msg = ('Updating main site (%s) with ' % update_url +
                       'completed files for task_id=%s' % task_id)
+
         if subtype:
             task_data['subtype'] = subtype
             status_msg += ' and subtype=%s' % subtype
 
-        print (status_msg)
-        requests.post(update_url, data={'task_data': json.dumps(task_data)})
+        print status_msg
+
+        requests.post(update_url, json={'task_data': task_data})

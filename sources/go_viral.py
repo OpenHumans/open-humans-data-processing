@@ -126,7 +126,7 @@ def create_datafiles(access_token, go_viral_id, task_id=None, update_url=None,
                   ' with task_data:\n{}'.format(
                       update_url, task_id, json.dumps(task_data)))
     print status_msg
-    requests.post(update_url, data={'task_data': json.dumps(task_data)})
+    requests.post(update_url, json={'task_data': task_data})
 
 
 if __name__ == '__main__':

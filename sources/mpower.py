@@ -145,7 +145,7 @@ def create_datafiles(username, input_file=None, file_url=None, task_id=None,
         'data_files': data_files
     }
 
-    requests.post(update_url, data={'task_data': json.dumps(task_data)})
+    requests.post(update_url, json={'task_data': task_data})
 
 
 if __name__ == '__main__':
