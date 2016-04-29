@@ -8,7 +8,7 @@ see LICENSE.TXT for full license text.
 
 May be used on the command line. For example, the following command:
 
-    python -m data_retrieval.ancestry_dna ~/Downloads/AncestryDNA.zip files
+    python -m sources.ancestry_dna ~/Downloads/AncestryDNA.zip files
 
 Will assemble processed data sets in files/
 """

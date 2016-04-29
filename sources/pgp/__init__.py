@@ -8,7 +8,7 @@ see LICENSE.TXT for full license text.
 
 May be used on the command line from this project's base directory, e.g.
 
-   python -m data_retrieval.pgp_harvard hu43860C files
+   python -m sources.pgp hu43860C files
 
 ...assembles data sets for the ID "hu43860C" in the "files" directory, e.g.:
 

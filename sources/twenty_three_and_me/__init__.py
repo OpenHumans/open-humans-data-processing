@@ -8,7 +8,7 @@ see LICENSE.TXT for full license text.
 
 May be used on the command line. For example, the following command:
 
-    python -m data_retrieval.twentythree_and_me <23andme_token> \
+    python -m sources.twentythree_and_me <23andme_token> \
         <23andme_profile_id> files
 
 Will assemble a data set in files/

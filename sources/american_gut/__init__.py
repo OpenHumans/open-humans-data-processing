@@ -8,7 +8,7 @@ see LICENSE.TXT for full license text.
 
 May be used on the command line from this project's base directory, e.g.
 
-   python -m data_retrieval.american_gut 000007080 files
+   python -m sources.american_gut 000007080 files
 
 ...will assemble a data set for the barcode 000007080 at:
 

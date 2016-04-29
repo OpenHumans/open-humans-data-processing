@@ -8,7 +8,7 @@ see LICENSE.TXT for full license text.
 
 May be used on the command line. For example, the following command:
 
-    python -m data_retrieval.ubiome ~/Downloads/uBiome.zip files
+    python -m sources.ubiome ~/Downloads/uBiome.zip files
 
 Will assemble processed data sets in files/
 """

@@ -8,7 +8,7 @@ see LICENSE.TXT for full license text.
 
 May be used on the command line from this project's base directory, e.g.
 
-   python -m data_retrieval.runkeeper [accesstoken] files
+   python -m sources.runkeeper [accesstoken] files
 
 ...where [accesstoken] is the private token RunKeeper's API has created that
 grants permission to access a user's data. (Keep it safe!) This will assemble

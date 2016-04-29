@@ -13,7 +13,7 @@ from .utilities import apply_env, get_env
 
 from sources.american_gut import create_datafiles as datafiles_american_gut
 from sources.go_viral import create_datafiles as datafiles_go_viral
-from sources.pgp_harvard import create_datafiles as datafiles_pgp
+from sources.pgp import create_datafiles as datafiles_pgp
 from sources.runkeeper import create_datafiles as datafiles_runkeeper
 from sources.twenty_three_and_me import (
     create_datafiles as datafiles_twenty_three_and_me)
