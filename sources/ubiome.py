@@ -13,7 +13,6 @@ May be used on the command line. For example, the following command:
 Will assemble processed data sets in files/
 """
 
-import json
 import os
 import shutil
 import tempfile
