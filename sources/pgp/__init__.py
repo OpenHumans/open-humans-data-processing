@@ -159,7 +159,7 @@ def parse_pgp_profile_page(huID):
 
 def vcf_from_var(vcf_filename, tempdir, var_filepath):
     """
-    Generate gVCF from Complete Genomics var file.
+    Generate VCF from Complete Genomics var file.
 
     Returns temp file info as array of dicts. Only one dict expected.
     """
@@ -174,14 +174,15 @@ def vcf_from_var(vcf_filename, tempdir, var_filepath):
         cgi_input=var_filepath,
         output_file=vcf_filepath,
         twobit_ref=reference,
-        twobit_name=twobit_name)
+        twobit_name=twobit_name,
+        var_only=True)
     temp_files = [{
         'temp_filename': vcf_filename,
         'tempdir': tempdir,
         'metadata': {
-            'description': ('PGP Harvard genome, gVCF file. Derived from '
+            'description': ('PGP Harvard genome, VCF file. Derived from '
                             'Complete Genomics var file.'),
-            'tags': ['vcf', 'gvcf', 'genome', 'Complete Genomics'],
+            'tags': ['vcf', 'genome', 'Complete Genomics'],
             }
         }]
     return temp_files
@@ -189,7 +190,7 @@ def vcf_from_var(vcf_filename, tempdir, var_filepath):
 
 def handle_var_file(filename, tempdir, huID, source):
     """
-    Rename var data file from PGP Harvard genome data, generate gVCF.
+    Rename var data file from PGP Harvard genome data, generate VCF.
 
     Returns temp file info as array of dicts.
     """
