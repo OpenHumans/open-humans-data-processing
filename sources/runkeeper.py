@@ -21,20 +21,19 @@ data sets for the user at:
 (These filenames include an example user ID, "12345678", and an example
 datetime stamp, "January 2rd 2015 3:04:05am".)
 """
+
 from __future__ import unicode_literals
 
-from collections import OrderedDict
-from cStringIO import StringIO
-import csv
-from datetime import datetime, timedelta
 import json
 import os
 import sys
 import tempfile
 
+from datetime import datetime, timedelta
+
 import requests
 
-from .files import mv_tempfile_to_output
+from data_retrieval.files import mv_tempfile_to_output
 
 BACKGROUND_DATA_KEYS = ['timestamp', 'steps', 'calories_burned', 'source']
 FITNESS_SUMMARY_KEYS = ['type', 'equipment', 'start_time', 'utc_offset',
@@ -65,7 +64,7 @@ def get_items(access_token, path, recurse='both'):
 
     RunKeeper uses the same pages format for items in various places.
     """
-    print "PATH: {}".format(path)
+    print 'PATH: {}'.format(path)
     query_data = runkeeper_query(access_token, path)
     print len(query_data['items'])
     items = query_data['items']
@@ -97,20 +96,27 @@ def data_for_keys(data_dict, data_keys):
 
 def yearly_items(items):
     current_year = (datetime.now() - timedelta(days=1)).year
-    yearly_items = {}
+
+    items = {}
     complete_years = []
+
     for item in items:
         try:
             time_string = item['start_time']
         except KeyError:
             time_string = item['timestamp']
+
         start_time = datetime.strptime(time_string, '%a, %d %b %Y %H:%M:%S')
-        if start_time.year not in yearly_items:
-            yearly_items[start_time.year] = []
+
+        if start_time.year not in items:
+            items[start_time.year] = []
+
             if start_time.year < current_year:
                 complete_years.append(start_time.year)
-        yearly_items[start_time.year].append(item)
-    return yearly_items, complete_years
+
+        items[start_time.year].append(item)
+
+    return items, complete_years
 
 
 def get_runkeeper_data(access_token, user_data, tempdir):
@@ -195,10 +201,7 @@ def get_runkeeper_data(access_token, user_data, tempdir):
     return new_temp_files
 
 
-def create_runkeeper_datafiles(access_token,
-                               task_id=None,
-                               update_url=None,
-                               **kwargs):
+def create_datafiles(access_token, task_id=None, update_url=None, **kwargs):
     """
     Create Open Humans Dataset from RunKeeper API data
 
@@ -224,7 +227,7 @@ def create_runkeeper_datafiles(access_token,
     print 'Finished creating all datasets locally.'
 
     for file_info in temp_files:
-        print "File info: {}".format(str(file_info))
+        print 'File info: {}'.format(str(file_info))
         filename = file_info['temp_filename']
         file_tempdir = file_info['tempdir']
         output_path = mv_tempfile_to_output(
@@ -256,4 +259,4 @@ if __name__ == '__main__':
         print 'Please specify a token and directory.'
         sys.exit(1)
 
-    create_runkeeper_datafiles(*sys.argv[1:-1], filedir=sys.argv[-1])
+    create_datafiles(*sys.argv[1:-1], filedir=sys.argv[-1])

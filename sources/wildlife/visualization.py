@@ -19,6 +19,7 @@ def get_counts(filepath):
     level, each of which (in turn) has values that are dicts in the same format
     """
     counts = {}
+
     with bz2.BZ2File(filepath) as f:
         bac_rows = csv.reader(f)
         header = bac_rows.next()
@@ -26,7 +27,7 @@ def get_counts(filepath):
         for row in bac_rows:
             if not any([int(x) for x in row[1:-1]]):
                 continue
-            classification = row[-1].split("/")
+            classification = row[-1].split('/')
             for i in range(len(row[1:-1])):
                 count = int(row[i + 1])
                 if count == 0:
@@ -76,6 +77,7 @@ def get_summary_counts(counts, max_counts, min_counts, path):
             if counts[category]['count'] >= min_counts:
                 summary_counts += [
                     (path+[category], counts[category]['count'])]
+
     return summary_counts
 
 
@@ -107,7 +109,7 @@ def add_pie_chart(summary_counts, sample_name, fig, graph_i, graphs_num):
     for t in pie_chart[2]:
         t.set_size('x-small')
     ax.set_title(sample_name)
-    ax.text(-0.6, -1.35, "Groups with less than 0.4% not depicted.")
+    ax.text(-0.6, -1.35, 'Groups with less than 0.4% not depicted.')
 
 
 def make_pie_charts(counts, output_filepath):
@@ -137,8 +139,13 @@ def make_pie_charts(counts, output_filepath):
     fig.savefig(output_filepath)
 
 
-if __name__ == '__main__':
+def generate_manually():
     input_filename = sys.argv[1]
     counts = get_counts(filepath=input_filename)
-    output_filename = input_filename.split(".")[0] + '-graphs.png'
+    output_filename = input_filename.split('.')[0] + '-graphs.png'
+
     make_pie_charts(counts, output_filename)
+
+
+if __name__ == '__main__':
+    generate_manually()

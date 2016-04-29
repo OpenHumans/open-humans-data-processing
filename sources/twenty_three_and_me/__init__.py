@@ -13,12 +13,12 @@ May be used on the command line. For example, the following command:
 
 Will assemble a data set in files/
 """
+
 import bz2
 import gzip
 import json
 import os
 import re
-import requests
 import shutil
 import sys
 import tempfile
@@ -27,12 +27,13 @@ import zipfile
 from cStringIO import StringIO
 from datetime import date, datetime
 
+import requests
+
 from boto.s3.connection import S3Connection
 
-from .files import get_remote_file, mv_tempfile_to_output, now_string
+from data_retrieval.files import get_remote_file, mv_tempfile_to_output
 
-REF_23ANDME_FILE = os.path.join(
-    os.path.dirname(__file__), '23andme', 'reference_b37.txt')
+REF_23ANDME_FILE = os.path.join(os.path.dirname(__file__), 'reference_b37.txt')
 
 # Was used to generate reference genotypes in the previous file.
 REFERENCE_GENOME_URL = ('http://hgdownload-test.cse.ucsc.edu/' +
@@ -117,7 +118,7 @@ def vcf_from_raw_23andme(raw_23andme):
         # Figure out the alternate alleles.
         alt_alleles = []
         for alle in data[3]:
-            if not alle == vcf_data['REF'] and alle not in alt_alleles:
+            if alle != vcf_data['REF'] and alle not in alt_alleles:
                 alt_alleles.append(alle)
         if alt_alleles:
             vcf_data['ALT'] = ','.join(alt_alleles)
@@ -212,19 +213,19 @@ def clean_raw_23andme(input_filepath, sentry=None, username=None):
         next_line = inputfile.next()
     if len(header_lines) == len(expected_header_v2):
         if all([expected_header_v2[i] == header_lines[i] for i in
-                 range(len(expected_header_v2))]):
+                range(len(expected_header_v2))]):
             for line in expected_header_v2:
                 output.write(line)
     elif len(header_lines) == len(expected_header_v1):
         if all([expected_header_v1[i] == header_lines[i] for i in
-                 range(len(expected_header_v1))]):
+                range(len(expected_header_v1))]):
             for line in expected_header_v1:
                 output.write(line)
     else:
         if sentry:
             sentry_msg = '23andMe header did not conform to expected format.'
             if username:
-                sentry_msg = sentry_msg + " Username: {}".format(username)
+                sentry_msg = sentry_msg + ' Username: {}'.format(username)
             sentry.captureMessage(sentry_msg)
 
     bad_format = False
@@ -234,7 +235,8 @@ def clean_raw_23andme(input_filepath, sentry=None, username=None):
             output.write(next_line)
         else:
             bad_format = True
-            print "BAD FORMAT:\n{}".format(next_line)
+            print 'BAD FORMAT:\n{}'.format(next_line)
+
         try:
             next_line = inputfile.next()
         except StopIteration:
@@ -243,19 +245,14 @@ def clean_raw_23andme(input_filepath, sentry=None, username=None):
     if bad_format and sentry:
         sentry_msg = '23andMe body did not conform to expected format.'
         if username:
-            sentry_msg = sentry_msg + " Username: {}".format(username)
+            sentry_msg = sentry_msg + ' Username: {}'.format(username)
         sentry.captureMessage(sentry_msg)
 
     return output
 
 
-def create_23andme_datafiles(username,
-                             input_file=None,
-                             file_url=None,
-                             task_id=None,
-                             update_url=None,
-                             sentry=None,
-                             **kwargs):
+def create_datafiles(username, input_file=None, file_url=None, task_id=None,
+                     update_url=None, sentry=None, **kwargs):
     """Create Open Humans Dataset from uploaded 23andme full genotyping data
 
     Optional arguments:
@@ -299,7 +296,7 @@ def create_23andme_datafiles(username,
             'temp_filename': raw_filename,
             'tempdir': tempdir,
             'metadata': {
-                'description': "23andMe full genotyping data, original format",
+                'description': '23andMe full genotyping data, original format',
                 'tags': ['23andMe', 'genotyping'],
             },
         })
@@ -313,7 +310,7 @@ def create_23andme_datafiles(username,
             'temp_filename': vcf_filename,
             'tempdir': tempdir,
             'metadata': {
-                'description': "23andMe full genotyping data, VCF format",
+                'description': '23andMe full genotyping data, VCF format',
                 'tags': ['23andMe', 'genotyping', 'vcf'],
             },
         })
@@ -321,7 +318,7 @@ def create_23andme_datafiles(username,
     print 'Finished creating all datasets locally.'
 
     for file_info in temp_files:
-        print "File info: {}".format(str(file_info))
+        print 'File info: {}'.format(str(file_info))
         filename = file_info['temp_filename']
         file_tempdir = file_info['tempdir']
         output_path = mv_tempfile_to_output(
@@ -352,7 +349,10 @@ def create_23andme_datafiles(username,
 
 if __name__ == '__main__':
     if len(sys.argv) != 4:
-        print 'Please specify a remote file URL, target local directory, and username.'
+        print ('Please specify a remote file URL, target local directory, '
+               'and username.')
+
         sys.exit(1)
 
-    create_23andme_datafiles(input_file=sys.argv[1], filedir=sys.argv[2], username=sys.argv[3])
+    create_datafiles(input_file=sys.argv[1], filedir=sys.argv[2],
+                     username=sys.argv[3])

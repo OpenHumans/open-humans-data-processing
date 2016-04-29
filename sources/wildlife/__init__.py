@@ -6,20 +6,19 @@ Copyright (C) 2016 PersonalGenomes.org
 This software is shared under the "MIT License" license (aka "Expat License"),
 see LICENSE.TXT for full license text.
 """
+
 import json
 import os
 import re
-import requests
 import tempfile
 
-from .files import get_remote_file, mv_tempfile_to_output
-from .visualization import wildlife as wildlife_vis
+import requests
+
+from data_retrieval.files import get_remote_file, mv_tempfile_to_output
+from . import visualization
 
 
-def create_wildlife_datafiles(files,
-                              task_id=None,
-                              update_url=None,
-                              **kwargs):
+def create_datafiles(files, task_id=None, update_url=None, **kwargs):
     """
     Create datafiles from a set of Wild Life of Our Homes file links.
 
@@ -73,10 +72,10 @@ def create_wildlife_datafiles(files,
                 vis_descr = ('Visualization of Wild Life of Our Homes fungi '
                              'data')
                 vis_tags = ['fungi'] + vis_tags
-            counts = wildlife_vis.get_counts(filepath=filepath)
-            vis_filename = filename.split(".")[0] + '-graphs.png'
+            counts = visualization.get_counts(filepath=filepath)
+            vis_filename = filename.split('.')[0] + '-graphs.png'
             vis_filepath = os.path.join(tempdir, vis_filename)
-            wildlife_vis.make_pie_charts(counts, vis_filepath)
+            visualization.make_pie_charts(counts, vis_filepath)
             temp_files += [
                 {
                     'temp_filename': filename,
@@ -98,7 +97,7 @@ def create_wildlife_datafiles(files,
     print 'Finished creating all datasets locally.'
 
     for file_info in temp_files:
-        print "File info: {}".format(str(file_info))
+        print 'File info: {}'.format(str(file_info))
         filename = file_info['temp_filename']
         file_tempdir = file_info['tempdir']
         output_path = mv_tempfile_to_output(

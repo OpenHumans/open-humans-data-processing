@@ -12,10 +12,10 @@ May be used on the command line. For example, the following command:
 
 Will assemble processed data sets in files/
 """
+
 import json
 import os
 import shutil
-# import sys
 import tempfile
 import zipfile
 
@@ -23,7 +23,7 @@ import requests
 
 from boto.s3.connection import S3Connection
 
-from .files import get_remote_file, mv_tempfile_to_output
+from data_retrieval.files import get_remote_file, mv_tempfile_to_output
 
 
 def s3_connection():
@@ -67,8 +67,8 @@ def verify_ubiome(input_filepath, sentry=None, username=None):
         raise ValueError('Input file is expected to be a ZIP archive')
 
 
-def create_ubiome_datafiles(username, samples=None, task_id=None,
-                            update_url=None, sentry=None, **kwargs):
+def create_datafiles(username, samples=None, task_id=None, update_url=None,
+                     sentry=None, **kwargs):
     """
     Create Open Humans Dataset from uploaded uBiome data.
 
@@ -149,5 +149,5 @@ def create_ubiome_datafiles(username, samples=None, task_id=None,
 
 #         sys.exit(1)
 
-#     create_ubiome_datafiles(input_file=sys.argv[1], filedir=sys.argv[2],
-#                             username=sys.argv[3])
+#     create_datafiles(input_file=sys.argv[1], filedir=sys.argv[2],
+#                      username=sys.argv[3])

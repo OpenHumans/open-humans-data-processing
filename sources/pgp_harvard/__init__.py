@@ -19,6 +19,7 @@ May be used on the command line from this project's base directory, e.g.
 
 (These filenames includes a datetime stamp, January 2rd 2016 3:04:05am UTC.)
 """
+
 import json
 import os
 import re
@@ -31,7 +32,7 @@ import requests
 
 from bs4 import BeautifulSoup
 
-from .files import get_remote_file, mv_tempfile_to_output
+from data_retrieval.files import get_remote_file, mv_tempfile_to_output
 
 BASE_URL = 'https://my.pgp-hms.org'
 
@@ -165,8 +166,7 @@ def vcf_from_var(vcf_filename, tempdir, var_filepath):
     vcf_filepath = os.path.join(tempdir, vcf_filename)
     # Determine local storage directory
     storage_dir = os.path.join(
-        os.path.dirname(os.path.realpath(__file__)),
-        '..', 'resource_files')
+        os.path.dirname(os.path.realpath(__file__)), 'resources')
     reference, twobit_name = cgivar2gvcf.get_reference_genome_file(
         refseqdir=storage_dir, build='b37')
     # TODO: Mock this for performing tests. This is extremely slow.
@@ -288,20 +288,18 @@ def handle_uploaded_file(filename,
     else:
         # We've had one case of an old file not matching standard name format.
         # For this person there is a more recent file, so we'll just skip it.
-        if filename == "GS000005532-ASM.tsv.bz2":
+        if filename == 'GS000005532-ASM.tsv.bz2':
             pass
+
         if sentry:
             sentry.captureMessage('PGP Complete Genomics filename in '
                                   'unexpected format: {}'.format(filename))
-        pass
+
     return temp_files
 
 
-def create_pgpharvard_datafiles(huID,
-                                sentry=None,
-                                task_id=None,
-                                update_url=None,
-                                **kwargs):
+def create_datafiles(huID, sentry=None, task_id=None, update_url=None,
+                     **kwargs):
     """
     Create DataFiles for Open Humans from a PGP Harvard ID.
 
@@ -334,9 +332,9 @@ def create_pgpharvard_datafiles(huID,
                     item['type'] == 'Complete Genomics'):
                 continue
             # TODO: Mock this for performing tests. This is slow.
-            print "Getting file from {}".format(item['link'])
+            print 'Getting file from {}'.format(item['link'])
             filename = get_remote_file(item['link'], tempdir)
-            print "Retrieved file from {} with filename: {}".format(
+            print 'Retrieved file from {} with filename: {}'.format(
                 item['link'], filename)
             temp_files += handle_uploaded_file(
                 filename, tempdir, huID, source=item['link'], sentry=sentry)
@@ -344,7 +342,7 @@ def create_pgpharvard_datafiles(huID,
     print 'Finished creating all datasets locally.'
 
     for file_info in temp_files:
-        print "File info: {}".format(str(file_info))
+        print 'File info: {}'.format(str(file_info))
         filename = file_info['temp_filename']
         file_tempdir = file_info['tempdir']
         output_path = mv_tempfile_to_output(
@@ -372,4 +370,4 @@ def create_pgpharvard_datafiles(huID,
 
 
 if __name__ == '__main__':
-    create_pgpharvard_datafiles(huID=sys.argv[1], filedir=sys.argv[2])
+    create_datafiles(huID=sys.argv[1], filedir=sys.argv[2])
