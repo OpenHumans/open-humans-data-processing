@@ -97,7 +97,7 @@ def data_for_keys(data_dict, data_keys):
 def yearly_items(items):
     current_year = (datetime.now() - timedelta(days=1)).year
 
-    items = {}
+    result = {}
     complete_years = []
 
     for item in items:
@@ -108,15 +108,15 @@ def yearly_items(items):
 
         start_time = datetime.strptime(time_string, '%a, %d %b %Y %H:%M:%S')
 
-        if start_time.year not in items:
-            items[start_time.year] = []
+        if start_time.year not in result:
+            result[start_time.year] = []
 
             if start_time.year < current_year:
                 complete_years.append(start_time.year)
 
-        items[start_time.year].append(item)
+        result[start_time.year].append(item)
 
-    return items, complete_years
+    return result, complete_years
 
 
 def get_runkeeper_data(access_token, user_data, tempdir):
