@@ -181,7 +181,8 @@ def load_sources():
     A generator that iterates and loads all of the modules in the sources/
     directory.
     """
-    source_path = [os.path.join(sys.path[0], 'sources')]
+    source_path = [os.path.join(
+        os.path.dirname(os.path.abspath(__file__)), 'sources')]
 
     for _, name, _ in pkgutil.iter_modules(source_path):
         f, pathname, desc = imp.find_module(name, source_path)
@@ -215,6 +216,8 @@ def generic_handler(name):
 
 def add_rules():
     for name, source in load_sources():
+        logging.info('Adding "%s"', name)
+
         DATAFILES[name] = source.create_datafiles
 
         app.add_url_rule('/{}/'.format(name),
