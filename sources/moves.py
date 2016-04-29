@@ -30,21 +30,6 @@ import requests
 
 from data_retrieval.files import mv_tempfile_to_output
 
-# We may encounter a "too many requests" error if more than one process is
-# attempting to query Moves data. If this is encountered, the process is
-# instructed to wait a random number of minutes, between MIN_WAIT_MINUTES
-# and MAX_WAIT_MINUTES, before trying again.
-MIN_WAIT_MINUTES = 1
-MAX_WAIT_MINUTES = 6
-
-BACKGROUND_DATA_KEYS = ['timestamp', 'steps', 'calories_burned', 'source']
-FITNESS_SUMMARY_KEYS = ['type', 'equipment', 'start_time', 'utc_offset',
-                        'total_distance', 'duration', 'total_calories',
-                        'climb', 'source']
-FITNESS_PATH_KEYS = ['latitude', 'longitude', 'altitude', 'timestamp', 'type']
-
-PAGESIZE = '10000'
-
 
 def moves_query(access_token, path, retries=0):
     """
