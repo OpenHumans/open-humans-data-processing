@@ -210,7 +210,7 @@ def datafiles_task(name, **task_params):
 
 def generic_handler(name):
     # TODO: have open-humans post JSON data
-    datafiles_task.delay(name, **json.loads(request.args['task_params']))
+    datafiles_task.delay(name, **json.loads(request.values['task_params']))
 
     return '{} dataset started'.format(name)
 
