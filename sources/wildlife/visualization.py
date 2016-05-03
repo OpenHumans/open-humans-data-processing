@@ -21,15 +21,28 @@ def get_counts(filepath):
     counts = {}
 
     with bz2.BZ2File(filepath) as f:
-        bac_rows = csv.reader(f)
-        header = bac_rows.next()
+        count_rows = csv.reader(f)
+
+        # Store counts for every column other than the first and last.
+        header = count_rows.next()
         counts = {k: {} for k in header[1:-1]}
-        for row in bac_rows:
-            if not any([int(x) for x in row[1:-1]]):
+
+        # Track failed sample columns. These have empty values in the csv.
+        failed_sample_columns = []
+
+        for row in count_rows:
+            if not any([int(x) for x in row[1:-1] if x]):
                 continue
             classification = row[-1].split('/')
             for i in range(len(row[1:-1])):
-                count = int(row[i + 1])
+                if i in failed_sample_columns:
+                    continue
+                count = 0
+                try:
+                    count = int(row[i + 1])
+                except ValueError:
+                    del(counts[header[i + 1]])
+                    failed_sample_columns.append(i)
                 if count == 0:
                     continue
                 counts_level = counts[header[i + 1]]
@@ -85,7 +98,7 @@ def add_pie_chart(summary_counts, sample_name, fig, graph_i, graphs_num):
     """
     Add a pie chart to a Wild Life of Our Homes data visualization figure.
     """
-    ax = fig.add_axes([0.25, 0.02 + (1.0 / graphs_num) * graph_i, 0.50, 0.23])
+    ax = fig.add_axes([0.25, 0.02 + (0.98 / graphs_num) * graph_i, 0.50, (0.98 / graphs_num)])
     ax.set_aspect(1)
     color_set = [c for c in colors.cnames if
                  sum(colors.hex2color(colors.cnames[c])) < 2.5 and
