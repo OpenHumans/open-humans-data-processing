@@ -12,7 +12,7 @@ billiard==3.3.0.23        # via celery
 blinker==1.4              # via raven
 boto==2.40.0
 celery==3.1.23
-cgivar2gvcf==0.1.6
+cgivar2gvcf==0.1.7
 click==6.6                # via pip-tools
 contextlib2==0.5.1        # via raven
 cycler==0.10.0            # via matplotlib
