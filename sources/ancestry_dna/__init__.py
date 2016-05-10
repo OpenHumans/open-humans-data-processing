@@ -369,8 +369,8 @@ def create_datafiles(username, input_file=None, file_url=None, task_id=None,
     # Save VCF AncestryDNA genotyping to temp file.
     vcf_ancestrydna_unsorted.seek(0)
     vcf_ancestrydna_sorted = sort_vcf(vcf_ancestrydna_unsorted)
-    vcf_filename = filename_base + '.vcf'
-    with open(os.path.join(tempdir, vcf_filename), 'w') as vcf_file:
+    vcf_filename = filename_base + '.vcf.bz2'
+    with bz2.BZ2File(os.path.join(tempdir, vcf_filename), 'w') as vcf_file:
         vcf_ancestrydna_sorted.seek(0)
         shutil.copyfileobj(vcf_ancestrydna_sorted, vcf_file)
         temp_files.append({

@@ -302,8 +302,8 @@ def create_datafiles(username, input_file=None, file_url=None, task_id=None,
         })
 
     # Save VCF 23andMe genotyping to temp file.
-    vcf_filename = filename_base + '.vcf'
-    with open(os.path.join(tempdir, vcf_filename), 'w') as vcf_file:
+    vcf_filename = filename_base + '.vcf.bz2'
+    with bz2.BZ2File(os.path.join(tempdir, vcf_filename), 'w') as vcf_file:
         vcf_23andme.seek(0)
         shutil.copyfileobj(vcf_23andme, vcf_file)
         temp_files.append({
