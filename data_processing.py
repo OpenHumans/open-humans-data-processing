@@ -28,7 +28,6 @@ from celery_worker import make_worker
 app = Flask(__name__)
 
 DEBUG = os.getenv('DEBUG', False)
-PORT = os.getenv('PORT', 5000)
 
 # A mapping of name/source argument pairs to send to the create_datafiles
 # method
