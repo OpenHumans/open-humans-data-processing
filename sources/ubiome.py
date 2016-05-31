@@ -18,6 +18,8 @@ import shutil
 import tempfile
 import zipfile
 
+from cStringIO import StringIO
+
 import requests
 
 from boto.s3.connection import S3Connection
@@ -94,7 +96,20 @@ def create_datafiles(username, samples=None, task_id=None, update_url=None,
 
         verify_ubiome(input_file, sentry, username)
 
+        taxonomy = StringIO(sample['taxonomy'])
+
         shutil.copyfile(input_file, os.path.join(tempdir, 'uBiome-fastq.zip'))
+        shutil.copyfileobj(taxonomy,
+                           file(os.path.join(tempdir, 'taxonomy.json'), 'w'))
+
+        temp_files.append({
+            'temp_filename': 'taxonomy.json',
+            'tempdir': tempdir,
+            'metadata': {
+                'desription': 'uBiome taxonomy data, original format',
+                'tags': ['uBiome', 'JSON'],
+            },
+        })
 
         temp_files.append({
             'temp_filename': 'uBiome-fastq.zip',
