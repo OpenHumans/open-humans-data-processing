@@ -30,7 +30,14 @@ import tempfile
 import requests
 
 from data_retrieval.files import mv_tempfile_to_output
-from models import db, CacheItem
+from models import CacheItem
+
+if __name__ == '__main__':
+    from utilities import init_db
+
+    db = init_db()
+else:
+    from models import db
 
 
 def moves_query(access_token, path, retries=0):
@@ -174,17 +181,5 @@ if __name__ == '__main__':
     if len(sys.argv) != 3:
         print 'Please specify a token and directory.'
         sys.exit(1)
-
-    # TODO: extract this to a utility method for other sources to use
-    from flask import Flask
-
-    app = Flask(__name__)
-
-    app.config.update(
-        SQLALCHEMY_DATABASE_URI=os.environ.get('DATABASE_URL'),
-        SQLALCHEMY_TRACK_MODIFICATIONS=False)
-
-    db.app = app
-    db.init_app(app)
 
     create_datafiles(*sys.argv[1:-1], filedir=sys.argv[-1])
