@@ -8,9 +8,9 @@ see LICENSE.TXT for full license text.
 
 May be used on the command line from this project's base directory, e.g.
 
-   python -m sources.moves [accesstoken] files
+   foreman run python -m sources.moves <access token> files/
 
-...where [accesstoken] is the private token the Moves API has created that
+...where <access token> is the private token the Moves API has created that
 grants permission to access a user's data. (Keep it safe!) This will assemble
 a data set for the user in that directory:
 
@@ -20,6 +20,7 @@ a data set for the user in that directory:
 from __future__ import unicode_literals
 
 from datetime import date, datetime
+
 import json
 import os
 import sys
@@ -29,6 +30,7 @@ import tempfile
 import requests
 
 from data_retrieval.files import mv_tempfile_to_output
+from models import db, CacheItem
 
 
 def moves_query(access_token, path, retries=0):
@@ -37,22 +39,41 @@ def moves_query(access_token, path, retries=0):
     """
     headers = {'Authorization': 'Bearer %s' % access_token}
     data_url = 'https://api.moves-app.com/api/1.1{}'.format(path)
+    data_key = '{}{}'.format(data_url, access_token)
+
+    cached_response = (CacheItem.query
+                       .filter_by(key=data_key)
+                       .order_by(CacheItem.request_time.desc())
+                       .first())
+
+    if cached_response:
+        return cached_response.response
+
     data_response = requests.get(data_url, headers=headers)
 
     # The docs imply rate cap applies to the app, in which case the following
     # is very likely to occur. We should use a single worker Moves queue to
     # avoids more than one worker being tied up with waiting this way.
     if data_response.status_code == 429:
-        print "{}: Moves rate cap encountered. Waiting 1 minute...".format(
+        print '{}: Moves rate cap encountered. Waiting 1 minute...'.format(
             datetime.utcnow().strftime('%Y%m%dT%H%M%S'))
+
         if retries >= 60:
             raise RuntimeError('Moves import: rate cap errors! '
                                'Retries still failing after 60 attempts.')
+
         retries += 1
+
         time.sleep(60)
+
         return moves_query(access_token, path, retries=retries)
-    data = data_response.json()
-    return data
+
+    response_json = data_response.json()
+
+    db.session.add(CacheItem(data_key, response_json))
+    db.session.commit()
+
+    return response_json
 
 
 def get_full_storyline(access_token):
@@ -153,5 +174,17 @@ if __name__ == '__main__':
     if len(sys.argv) != 3:
         print 'Please specify a token and directory.'
         sys.exit(1)
+
+    # TODO: extract this to a utility method for other sources to use
+    from flask import Flask
+
+    app = Flask(__name__)
+
+    app.config.update(
+        SQLALCHEMY_DATABASE_URI=os.environ.get('DATABASE_URL'),
+        SQLALCHEMY_TRACK_MODIFICATIONS=False)
+
+    db.app = app
+    db.init_app(app)
 
     create_datafiles(*sys.argv[1:-1], filedir=sys.argv[-1])

@@ -25,6 +25,8 @@ from werkzeug.contrib.fixers import ProxyFix
 
 from celery_worker import make_worker
 
+from models import db
+
 app = Flask(__name__)
 
 DEBUG = os.getenv('DEBUG', False)
@@ -50,17 +52,22 @@ if os.getenv('HEROKU') == 'true':
     app.wsgi_app = ProxyFix(app.wsgi_app)
 
 app.config.update(
-    DEBUG=DEBUG,
-    CELERY_BROKER_URL=os.environ.get('CLOUDAMQP_URL', 'amqp://'),
+    BROKER_POOL_LIMIT=0,
+    CELERYD_LOG_COLOR=True,
     CELERY_ACCEPT_CONTENT=['json'],
-    CELERY_TASK_SERIALIZER='json',
+    CELERY_BROKER_URL=os.environ.get('CLOUDAMQP_URL', 'amqp://'),
     CELERY_RESULT_SERIALIZER='json',
     CELERY_SEND_EVENTS=False,
-    CELERYD_LOG_COLOR=True,
-    BROKER_POOL_LIMIT=0)
+    CELERY_TASK_SERIALIZER='json',
+    DEBUG=DEBUG,
+    SQLALCHEMY_DATABASE_URI=os.environ.get('DATABASE_URL'),
+    SQLALCHEMY_TRACK_MODIFICATIONS=False)
 
 sentry = Sentry(app)
 sslify = SSLify(app)
+
+db.app = app
+db.init_app(app)
 
 celery_worker = make_worker(app)
 
