@@ -13,10 +13,26 @@ as well as a `\.env` file containing environment variable values (see
 
 ### Setting up the cache database
 
-Specify a Postgres connection string in your `.env` file, e.g.:
+Running this site requires a PostgreSQL database (even for local development).
+
+- In Debian/Ubuntu
+  - Become the postgres user: `sudo su - postgres`
+  - Create a database (example name 'mydb'): `createdb mydb`
+  - Create a user (example user 'jdoe'): `createuser -P jdoe`
+  - Enter the password at prompt (example password: 'pa55wd')
+  - run PostgreSQL command line: `psql`
+    - Give this user privileges on this database, e.g.:<br>
+      `GRANT ALL PRIVILEGES ON DATABASE mydb TO jdoe;`
+    - Also allow this user to create new databases (needed for running tests),
+      e.g.:<br>
+      `ALTER USER jdoe CREATEDB;`
+    - Quit: `\q`
+  - Exit postgres user login: `exit`
+
+Specify the Postgres connection string in your `.env` file, e.g.:
 
 ```sh
-DATABASE_URL="postgres://ohadmin:ohpassword@127.0.0.1/ohprocessing"
+DATABASE_URL="postgres://jdoe:pa55wd@127.0.0.1/mydb"
 ```
 
 Create the database tables like so:
