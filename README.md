@@ -16,7 +16,7 @@ as well as a `\.env` file containing environment variable values (see
 Specify a Postgres connection string in your `.env` file, e.g.:
 
 ```sh
-DATABASE_URL=""postgres://ohadmin:ohpassword@127.0.0.1/ohprocessing"
+DATABASE_URL="postgres://ohadmin:ohpassword@127.0.0.1/ohprocessing"
 ```
 
 Create the database tables like so:
