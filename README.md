@@ -11,6 +11,24 @@ For local development, running this app with `foreman` is strongly recommended,
 as well as a `\.env` file containing environment variable values (see
 `env.example`).
 
+### Setting up the cache database
+
+Specify a Postgres connection string in your `.env` file like so:
+
+```sh
+DATABASE_URL="postgres://127.0.0.1/processing"
+```
+
+Create the database tables like so:
+
+```sh
+$ foreman run ipython
+
+In [1]: from utilities import init_db
+In [2]: db = init_db()
+In [3]: db.create_all()
+```
+
 ### Notes on S3 Bucket Permissions
 
 Putting these here for future reference, for understanding best practices in
