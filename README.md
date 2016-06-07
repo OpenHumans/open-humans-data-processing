@@ -13,20 +13,20 @@ as well as a `\.env` file containing environment variable values (see
 
 ### Setting up the cache database
 
-Specify a Postgres connection string in your `.env` file like so:
+Specify a Postgres connection string in your `.env` file, e.g.:
 
 ```sh
-DATABASE_URL="postgres://127.0.0.1/processing"
+DATABASE_URL=""postgres://ohadmin:ohpassword@127.0.0.1/ohprocessing"
 ```
 
 Create the database tables like so:
 
 ```sh
-$ foreman run ipython
+$ foreman run python
 
-In [1]: from utilities import init_db
-In [2]: db = init_db()
-In [3]: db.create_all()
+>>> from utilities import init_db
+>>> db = init_db()
+>>> db.create_all()
 ```
 
 ### Notes on S3 Bucket Permissions
