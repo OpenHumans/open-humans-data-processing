@@ -90,59 +90,71 @@ def create_datafiles(username, samples=None, task_id=None, update_url=None,
     if not samples:
         raise Exception('`samples` parameter missing')
 
+    # Number samples if there is more than one.
+    sample_i = 0
+    if len(samples) > 1:
+        sample_i = 1
+
     for sample in samples:
         filename = get_remote_file(sample['sequence_file']['url'], tempdir)
         input_file = os.path.join(tempdir, filename)
 
         verify_ubiome(input_file, sentry, username)
 
+        fastq_filename = 'uBiome-fastq{}.zip'.format(
+            '-' + str(sample_i) if sample_i else '')
+        shutil.move(input_file, os.path.join(tempdir, fastq_filename))
+        metadata = {
+            'description': 'uBiome 16S FASTQ raw sequencing data.',
+            'tags': ['fastq', 'uBiome', '16S']
+        }
+        if sample['additional_notes']:
+            metadata['user_notes'] = sample['additional_notes']
+        temp_files.append({
+            'temp_filename': fastq_filename,
+            'tempdir': tempdir,
+            'metadata': metadata,
+        })
+
         taxonomy = StringIO(sample['taxonomy'])
-
-        shutil.copyfile(input_file, os.path.join(tempdir, 'uBiome-fastq.zip'))
+        taxonomy_filename = 'taxonomy{}.json'.format(
+            '-' + str(sample_i) if sample_i else '')
         shutil.copyfileobj(taxonomy,
-                           file(os.path.join(tempdir, 'taxonomy.json'), 'w'))
-
+                           file(os.path.join(tempdir, taxonomy_filename), 'w'))
+        metadata = {
+            'description': 'uBiome 16S taxonomy data, JSON format.',
+            'tags': ['json', 'uBiome', '16S']
+        }
+        if sample['additional_notes']:
+            metadata['user_notes'] = sample['additional_notes']
         temp_files.append({
-            'temp_filename': 'taxonomy.json',
+            'temp_filename': taxonomy_filename,
             'tempdir': tempdir,
-            'metadata': {
-                'desription': 'uBiome taxonomy data, original format',
-                'tags': ['uBiome', 'JSON'],
-            },
+            'metadata': metadata,
         })
 
-        temp_files.append({
-            'temp_filename': 'uBiome-fastq.zip',
-            'tempdir': tempdir,
-            'metadata': {
-                'description': 'uBiome data, original format',
-                'tags': ['uBiome', 'FASTQ'],
-            },
-        })
+        sample_i += 1
 
-        print 'Finished creating all datasets locally.'
+    print 'Finished creating all datasets locally.'
 
-        for file_info in temp_files:
-            print 'File info: {}'.format(str(file_info))
+    for file_info in temp_files:
+        print 'File info: {}'.format(str(file_info))
 
-            filename = file_info['temp_filename']
-            file_tempdir = file_info['tempdir']
+        filename = file_info['temp_filename']
+        file_tempdir = file_info['tempdir']
 
-            output_path = mv_tempfile_to_output(
-                os.path.join(file_tempdir, filename), filename, **kwargs)
+        output_path = mv_tempfile_to_output(
+            os.path.join(file_tempdir, filename), filename, **kwargs)
 
-            if 's3_key_dir' in kwargs and 's3_bucket_name' in kwargs:
-                data_files.append({
-                    's3_key': output_path,
-                    'metadata': file_info['metadata'],
-                })
+        if 's3_key_dir' in kwargs and 's3_bucket_name' in kwargs:
+            data_files.append({
+                's3_key': output_path,
+                'metadata': file_info['metadata'],
+            })
 
-        if samples:
-            os.remove(input_file)
+    print 'Finished moving all datasets to permanent storage.'
 
-        os.rmdir(tempdir)
-
-        print 'Finished moving all datasets to permanent storage.'
+    os.rmdir(tempdir)
 
     if not (task_id and update_url):
         return
