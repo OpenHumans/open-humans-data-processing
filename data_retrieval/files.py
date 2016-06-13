@@ -40,7 +40,7 @@ def copy_file_to_s3(bucket, keypath, filepath):
     # for example:
     # - 'foo.csv.bz2' is automatically assigned 'text/csv', browser renames the
     #    downloaded file to 'foo.csv'.
-    #  - 'foo.csv.bz2' set to type 'application/x-bzip2', browser renames the
+    # - 'foo.csv.bz2' set to type 'application/x-bzip2', browser renames the
     #    downloaded file to 'foo.bz2'.
     if keypath.endswith('.gz') or keypath.endswith('.bz2'):
         key.set_metadata('Content-Type', 'application/octet-stream')
@@ -56,25 +56,47 @@ def get_remote_file(url, tempdir):
     """
     Get and save a remote file to temporary directory. Return filename used.
     """
-    req = requests.get(url, stream=True)
-    if req.status_code != 200:
-        msg = 'File URL not working! Data processing aborted: {}'.format(url)
-        raise Exception(msg)
-    orig_filename = ''
-    if 'Content-Disposition' in req.headers:
-        regex = re.match(r'attachment; filename="(.*)"$',
-                         req.headers['Content-Disposition'])
-        if regex:
-            orig_filename = regex.groups()[0]
-    if not orig_filename:
-        orig_filename = urlparse.urlsplit(req.url)[2].split('/')[-1]
-    print orig_filename
-    tempf = open(os.path.join(tempdir, orig_filename), 'wb')
-    for chunk in req.iter_content(chunk_size=512 * 1024):
+    assert os.path.exists(tempdir), 'get_remote_file: path not found: "{}"'
+
+    print 'get_remote_file: retrieving "{}"'.format(url)
+    print 'get_remote_file: using temporary directory "{}"'.format(url)
+
+    # start a GET request but don't retrieve the data; we'll start retrieval
+    # below
+    request = requests.get(url, stream=True)
+
+    if request.status_code != 200:
+        raise Exception('File URL not working! Data processing aborted: {}'
+                        .format(url))
+
+    specified_filename = ''
+
+    # try to retrieve the filename via the 'Content-Disposition' filename
+    # header
+    if 'Content-Disposition' in request.headers:
+        filename = re.match(r'attachment; filename="(.*)"$',
+                            request.headers['Content-Disposition'])
+
+        if filename:
+            specified_filename = filename.groups()[0]
+
+    # if that header isn't sent then use the last portion of the URL as the
+    # filename ('https://test.com/hello/world.zip' becomes 'world.zip')
+    if not specified_filename:
+        specified_filename = urlparse.urlsplit(request.url)[2].split('/')[-1]
+
+    print 'get_remote_file: filename "{}"'.format(specified_filename)
+
+    temp_file = open(os.path.join(tempdir, specified_filename), 'wb')
+
+    # write each streamed chunk to the temporary file
+    for chunk in request.iter_content(chunk_size=512 * 1024):
         if chunk:
-            tempf.write(chunk)
-    tempf.close()
-    return orig_filename
+            temp_file.write(chunk)
+
+    temp_file.close()
+
+    return specified_filename
 
 
 def mv_tempfile_to_output(filepath, filename, **kwargs):
