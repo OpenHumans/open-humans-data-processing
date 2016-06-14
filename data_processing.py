@@ -81,11 +81,29 @@ def after_setup_logger_cb(logger, **kwargs):
         logger.setLevel(logging.DEBUG)
 
 
+def trunc_strings(obj, chars=300):
+    """
+    Truncate strings in a JSON serializable dict or list.
+    """
+    if isinstance(obj, basestring):
+        return obj[0:chars]
+    elif isinstance(obj, dict):
+        for key in obj.keys():
+            obj[key] = trunc_strings(obj[key], chars=chars)
+    elif isinstance(obj, list):
+        for i in range(len(obj)):
+            obj[i] = trunc_strings(obj[i], chars=chars)
+    return obj
+
+
 def debug_json(value):
     """
     Return a human-readable representation of JSON data.
     """
-    return json.dumps(value, sort_keys=True, indent=2, separators=(',', ': '))
+    return json.dumps(trunc_strings(value),
+                      sort_keys=True,
+                      indent=2,
+                      separators=(',', ': '))
 
 
 def make_task_data(task_id, task_state):
