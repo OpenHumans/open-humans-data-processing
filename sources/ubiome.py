@@ -90,50 +90,43 @@ def create_datafiles(username, samples=None, task_id=None, update_url=None,
     if not samples:
         raise Exception('`samples` parameter missing')
 
-    # Number samples if there is more than one.
-    sample_i = 0
-    if len(samples) > 1:
-        sample_i = 1
-
-    for sample in samples:
-        filename = get_remote_file(sample['sequence_file']['url'], tempdir)
+    for sample in enumerate(samples):
+        filename = get_remote_file(sample[1]['sequence_file']['url'], tempdir)
         input_file = os.path.join(tempdir, filename)
 
         verify_ubiome(input_file, sentry, username)
 
         fastq_filename = 'uBiome-fastq{}.zip'.format(
-            '-' + str(sample_i) if sample_i else '')
+            '-' + str(sample[0] + 1) if len(samples) > 1 else '')
         shutil.move(input_file, os.path.join(tempdir, fastq_filename))
         metadata = {
             'description': 'uBiome 16S FASTQ raw sequencing data.',
             'tags': ['fastq', 'uBiome', '16S']
         }
-        if sample['additional_notes']:
-            metadata['user_notes'] = sample['additional_notes']
+        if sample[1]['additional_notes']:
+            metadata['user_notes'] = sample[1]['additional_notes']
         temp_files.append({
             'temp_filename': fastq_filename,
             'tempdir': tempdir,
             'metadata': metadata,
         })
 
-        taxonomy = StringIO(sample['taxonomy'])
+        taxonomy = StringIO(sample[1]['taxonomy'])
         taxonomy_filename = 'taxonomy{}.json'.format(
-            '-' + str(sample_i) if sample_i else '')
+            '-' + str(sample[0] + 1) if len(samples) > 1 else '')
         shutil.copyfileobj(taxonomy,
                            file(os.path.join(tempdir, taxonomy_filename), 'w'))
         metadata = {
             'description': 'uBiome 16S taxonomy data, JSON format.',
             'tags': ['json', 'uBiome', '16S']
         }
-        if sample['additional_notes']:
-            metadata['user_notes'] = sample['additional_notes']
+        if sample[1]['additional_notes']:
+            metadata['user_notes'] = sample[1]['additional_notes']
         temp_files.append({
             'temp_filename': taxonomy_filename,
             'tempdir': tempdir,
             'metadata': metadata,
         })
-
-        sample_i += 1
 
     print 'Finished creating all datasets locally.'
 
