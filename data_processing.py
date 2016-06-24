@@ -189,7 +189,7 @@ def task_postrun_handler_cb(sender=None, state=None, kwargs=None, retval=None,
     # A task that has resubmitted itself to the queue (e.g. due to hitting a
     # rate limit cap) will return this status. Don't update as complete.
     if retval and retval == 'resubmitted':
-        print 'Not updating, this task has been resubmitted.'
+        logging.info('Not updating, this task has been resubmitted.')
         return
 
     update_url = kwargs.get('update_url')
@@ -228,7 +228,7 @@ def datafiles_task(name, **task_params):
     by load_sources.
 
     We handle rate caps by caching results in our database and requeing a
-    task with the same paramaters. To do this, tasks that needing requeueing
+    task with the same paramaters. To do this, tasks that need requeueing
     return a dict containing a key 'countdown' (a delay added when requeued).
 
     create_datafiles methods that return None are assumed to have completed
@@ -250,12 +250,12 @@ def datafiles_task(name, **task_params):
             task_params[key] = task_params['data'][value]
 
     return_status = DATAFILES[name](sentry=sentry, **task_params)
-    if return_status:
+    if return_status and 'countdown' in return_status:
         task_params['return_status'] = return_status
         datafiles_task.apply_async(args=[name],
                                    kwargs=task_params,
                                    countdown=return_status['countdown'])
-        return '{} dataset resubmitted'.format(name)
+        return 'resubmitted'
 
 
 def generic_handler(name):
