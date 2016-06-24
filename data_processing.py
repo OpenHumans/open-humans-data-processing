@@ -176,7 +176,7 @@ def task_prerun_handler_cb(sender=None, kwargs=None, **other_kwargs):
 
 
 @task_postrun.connect
-def task_postrun_handler_cb(sender=None, state=None, kwargs=None,
+def task_postrun_handler_cb(sender=None, state=None, kwargs=None, retval=None,
                             **other_kwargs):
     """
     Send update that task run is complete.
@@ -185,6 +185,12 @@ def task_postrun_handler_cb(sender=None, state=None, kwargs=None,
         return
 
     logging.debug('task_postrun kwargs: %s', debug_json(kwargs))
+
+    # A task that has resubmitted itself to the queue (e.g. due to hitting a
+    # rate limit cap) will return this status. Don't update as complete.
+    if retval and retval == 'resubmitted':
+        print 'Not updating, this task has been resubmitted.'
+        return
 
     update_url = kwargs.get('update_url')
     task_id = kwargs.get('task_id')
@@ -216,8 +222,23 @@ def load_sources():
 @celery_worker.task
 def datafiles_task(name, **task_params):
     """
-    A Celery task that runs a create_datafiles method and applies the argument
-    mappings from EXTRA_DATA.
+    Task to run appropriate create_datafiles method, with EXTRA_DATA mapping.
+
+    The 'name' parameter is used to look up the corresponding module, loaded
+    by load_sources.
+
+    We handle rate caps by caching results in our database and requeing a
+    task with the same paramaters. To do this, tasks that needing requeueing
+    return a dict containing a key 'countdown' (a delay added when requeued).
+
+    create_datafiles methods that return None are assumed to have completed
+    successfully.
+
+    Otherwise, the method may return a dict containing the key 'countdown',
+    indicating the task needs to be re-queued. The countdown parameter indicates
+    the delay to impose on the re-queued task. This allows us to work
+    gracefully with rate caps, caching successful queries in db and re-using
+    those when re-running the task.
     """
     mapping = EXTRA_DATA.get(name)
 
@@ -228,7 +249,13 @@ def datafiles_task(name, **task_params):
 
             task_params[key] = task_params['data'][value]
 
-    DATAFILES[name](sentry=sentry, **task_params)
+    return_status = DATAFILES[name](sentry=sentry, **task_params)
+    if return_status:
+        task_params['return_status'] = return_status
+        datafiles_task.apply_async(args=[name],
+                                   kwargs=task_params,
+                                   countdown=return_status['countdown'])
+        return '{} dataset resubmitted'.format(name)
 
 
 def generic_handler(name):
