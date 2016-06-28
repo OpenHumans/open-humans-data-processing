@@ -292,10 +292,15 @@ def handle_uploaded_file(filename,
         if filename == 'GS000005532-ASM.tsv.bz2':
             pass
 
+        if filename == 'genome_download.php':
+            raise IOError(
+                'Filename "genome_download.php" for PGP genome '
+                'indicates a broken link to the genome data file for {}! '
+                'Aborting data retrieval.'.format(huID))
+
         if sentry:
             sentry.captureMessage('PGP Complete Genomics filename in '
                                   'unexpected format: {}'.format(filename))
-
     return temp_files
 
 
