@@ -24,8 +24,8 @@ from datetime import date, datetime
 import json
 import os
 import sys
-import time
 import tempfile
+import time
 
 import requests
 
@@ -40,13 +40,23 @@ else:
     from models import db
 
 
-def moves_query(access_token, path, retries=0):
+def moves_query(access_token, path):
     """
-    Query Moves API and return data.
+    Query Moves API and return result.
+
+    Result is a dict with the following keys:
+        'response_json': data from the query JSON, or None if rate cap hit.
+        'rate_cap_encountered': None, or True if rate cap hit.
     """
     headers = {'Authorization': 'Bearer %s' % access_token}
     data_url = 'https://api.moves-app.com/api/1.1{}'.format(path)
     data_key = '{}{}'.format(data_url, access_token)
+
+    # Return dict. Either contains data, or indicates rate cap encountered.
+    query_result = {
+        'response_json': None,
+        'rate_cap_encountered': None,
+    }
 
     cached_response = (CacheItem.query
                        .filter_by(key=data_key)
@@ -54,71 +64,70 @@ def moves_query(access_token, path, retries=0):
                        .first())
 
     if cached_response:
-        return cached_response.response
+        query_result['response_json'] = cached_response.response
+        return query_result
 
     data_response = requests.get(data_url, headers=headers)
 
-    # The docs imply rate cap applies to the app, in which case the following
-    # is very likely to occur. We should use a single worker Moves queue to
-    # avoids more than one worker being tied up with waiting this way.
+    # If a rate cap is encountered, return a result reporting this.
     if data_response.status_code == 429:
-        print '{}: Moves rate cap encountered. Waiting 1 minute...'.format(
-            datetime.utcnow().strftime('%Y%m%dT%H%M%S'))
+        query_result['rate_cap_encountered'] = True
+        return query_result
 
-        if retries >= 60:
-            raise RuntimeError('Moves import: rate cap errors! '
-                               'Retries still failing after 60 attempts.')
+    query_result['response_json'] = data_response.json()
 
-        retries += 1
-
-        time.sleep(60)
-
-        return moves_query(access_token, path, retries=retries)
-
-    response_json = data_response.json()
-
-    db.session.add(CacheItem(data_key, response_json))
+    db.session.add(CacheItem(data_key, query_result['response_json']))
     db.session.commit()
 
-    return response_json
+    return query_result
 
 
 def get_full_storyline(access_token):
     """
-    Iterate to get all items for a given access_token and path.
+    Iterate to get all items for a given access_token and path, return result.
 
-    RunKeeper uses the same pages format for items in various places.
+    Result is a dict with the following keys:
+        'all_data': data from all items, or None if rate cap hit.
+        'rate_cap_encountered': None, or True if rate cap hit.
     """
+    full_storyline_result = {
+        'all_data': [],
+        'rate_cap_encountered': None,
+    }
     current_year = int(datetime.utcnow().strftime('%Y'))
     current_week = int(datetime.utcnow().strftime('%W'))
     in_user_range = True
-    all_data = []
     while in_user_range:
-        week_data = moves_query(
+        query_result = moves_query(
             access_token=access_token,
             path='/user/storyline/daily/{0}-W{1}?trackPoints=true'.format(
                 current_year,
                 str(current_week).zfill(2)
             ))
+        if query_result['rate_cap_encountered']:
+            full_storyline_result['rate_cap_encountered'] = True
+            return full_storyline_result
+        week_data = query_result['response_json']
         if 'error' in week_data:
             in_user_range = False
         else:
-            all_data = week_data + all_data
+            full_storyline_result['all_data'] = (
+                week_data + full_storyline_result['all_data'])
         if current_week > 1:
             current_week = current_week - 1
         else:
             current_year = current_year - 1
             current_week = int(
                 date(year=current_year, month=12, day=31).strftime('%W'))
-    return all_data
+    return full_storyline_result
 
 
 def create_datafiles(access_token, task_id=None, update_url=None, **kwargs):
     """
-    Create Open Humans Dataset from RunKeeper API data
+    Create Open Humans Dataset from Moves API data
 
     Required arguments:
-        access_token: RunKeeper access token
+        access_token: Moves access token
 
     Optional arguments:
         filedir: Local filepath, folder in which to place the resulting file.
@@ -142,7 +151,18 @@ def create_datafiles(access_token, task_id=None, update_url=None, **kwargs):
     }]
     data_files = []
 
-    user_data = get_full_storyline(access_token)
+    full_storyline_result = get_full_storyline(access_token)
+
+    if full_storyline_result['rate_cap_encountered']:
+        # If this is previously called and we got no new data this round,
+        # double the wait period for resubmission.
+        if 'return_status' in kwargs and not full_storyline_result['all_data']:
+            countdown = 2 * kwargs['return_status']['countdown']
+        else:
+            countdown = 60
+        return {'countdown': countdown}
+
+    user_data = full_storyline_result['all_data']
 
     with open(filepath, 'w') as f:
         json.dump(user_data, f, indent=2)
@@ -182,4 +202,12 @@ if __name__ == '__main__':
         print 'Please specify a token and directory.'
         sys.exit(1)
 
-    create_datafiles(*sys.argv[1:-1], filedir=sys.argv[-1])
+    while True:
+        result = create_datafiles(*sys.argv[1:-1], filedir=sys.argv[-1])
+        if result:
+            countdown = result['countdown']
+            print("Rate cap hit. Pausing {}s before resuming...".format(
+                countdown))
+            time.sleep(countdown)
+        else:
+            break
