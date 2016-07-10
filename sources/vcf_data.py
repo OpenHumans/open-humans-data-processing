@@ -1,16 +1,10 @@
 r"""
-uBiome fastq data extraction.
+Genome/Exome VCF data processing.
 
 Copyright (C) 2016 PersonalGenomes.org
 
 This software is shared under the "MIT License" license (aka "Expat License"),
 see LICENSE.TXT for full license text.
-
-May be used on the command line. For example, the following command:
-
-    python -m sources.ubiome ~/Downloads/uBiome.zip files
-
-Will assemble processed data sets in files/
 """
 import bz2
 import json
