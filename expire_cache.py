@@ -9,6 +9,10 @@ db = init_db()
 
 one_month_ago = datetime.now() - timedelta(days=30)
 
-(CacheItem.query
- .filter(CacheItem.request_time < one_month_ago)
- .delete())
+deleted_rows = (CacheItem.query
+                .filter(CacheItem.request_time < one_month_ago)
+                .delete())
+
+db.session.commit()
+
+print 'Deleted {} rows'.format(deleted_rows)
