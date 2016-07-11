@@ -1,4 +1,4 @@
-alembic==0.8.6
+arrow==0.8.0
 beautifulsoup4==4.4.1
 boto==2.40.0
 celery==3.1.23
