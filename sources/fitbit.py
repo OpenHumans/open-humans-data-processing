@@ -116,18 +116,27 @@ fitbit_urls = [
      'period': 'year'},
 
     # intraday timeline data
-    {'url': '/-/activities/heart/date/{date}/1d/1sec.json', 'period': 'day'},
-    {'url': '/-/activities/tracker/steps/date/{date}/1d/1min.json', 'period': 'day'},
+    {'name': 'intraday-heart',
+     'url': '/-/activities/heart/date/{date}/1d/1sec.json',
+     'period': 'day'},
+    {'name': 'intraday-steps',
+     'url': '/-/activities/tracker/steps/date/{date}/1d/1min.json',
+     'period': 'day'},
 ]
+
+
+class RateCapException(Exception):
+    """
+    An exception that is raised if the Fitbit API tells us we've reached the
+    request rate cap.
+    """
+
+    pass
 
 
 def fitbit_query(access_token, path, parameters=None):
     """
     Query Fitbit API and return result.
-
-    Result is a dict with the following keys:
-        'response_json': data from the query JSON, or None if rate cap hit.
-        'rate_cap_encountered': None, or True if rate cap hit.
     """
     if not parameters:
         parameters = {}
@@ -138,36 +147,23 @@ def fitbit_query(access_token, path, parameters=None):
     data_url = 'https://api.fitbit.com/1/user{}'.format(path)
     data_key = '{}{}'.format(data_url, access_token)
 
-    # TODO: raise a RateCapEncountered exception instead of passing it back in
-    # the object (easier to consume)
-
-    # Return dict. Either contains data, or indicates rate cap encountered.
-    query_result = {
-        'response_json': None,
-        'rate_cap_encountered': None,
-    }
-
     cached_response = (CacheItem.query
                        .filter_by(key=data_key)
                        .order_by(CacheItem.request_time.desc())
                        .first())
 
     if cached_response:
-        query_result['response_json'] = cached_response.response
-
-        return query_result
+        return cached_response.response
 
     data_response = requests.get(data_url, headers=headers)
 
     # If a rate cap is encountered, return a result reporting this.
     if data_response.status_code == 429:
-        query_result['rate_cap_encountered'] = True
+        raise RateCapException()
 
-        return query_result
+    query_result = data_response.json()
 
-    query_result['response_json'] = data_response.json()
-
-    db.session.add(CacheItem(data_key, query_result['response_json']))
+    db.session.add(CacheItem(data_key, query_result))
     db.session.commit()
 
     return query_result
@@ -193,7 +189,7 @@ def get_fitbit_data(access_token):
                                         path=url['url'],
                                         parameters={'user_id': user_id})
 
-            fitbit_data[url['name']] = query_result['response_json']
+            fitbit_data[url['name']] = query_result
 
         for url in [url for url in fitbit_urls if url['period'] == 'year']:
             member_since = fitbit_data['profile']['user']['memberSince']
@@ -215,14 +211,48 @@ def get_fitbit_data(access_token):
 
                 fitbit_data[url['name']].append(query_result)
 
-        # TODO
         for url in [url for url in fitbit_urls if url['period'] == 'month']:
-            print url
+            member_since = fitbit_data['profile']['user']['memberSince']
 
-        # TODO
+            start_date = arrow.get(member_since, 'YYYY-MM-DD')
+            today_date = arrow.get()
+
+            dates = []
+
+            for year in xrange(start_date.year, today_date.year + 1):
+                start_month = 1
+                end_month = 12
+
+                if year == start_date.year == today_date.year:
+                    start_month = start_date.month
+                    end_month = today_date.month
+                elif year == start_date.year:
+                    start_month = start_date.month
+                elif year == today_date.year:
+                    end_month = today_date.month
+
+                dates += [(year, month) for month
+                          in range(start_month, end_month + 1)]
+
+            for year, month in dates:
+                print 'retrieving {}: {}, {}'.format(url['name'], year, month)
+
+                fitbit_data[url['name']] = []
+
+                query_result = fitbit_query(
+                    access_token=access_token,
+                    path=url['url'],
+                    parameters={
+                        'user_id': user_id,
+                        'date': '{}-{:02d}-01'.format(year, month),
+                    })
+
+                fitbit_data[url['name']].append(query_result)
+
+        # TODO: implement these once we're approved for Fitbit intraday access
         for url in [url for url in fitbit_urls if url['period'] == 'day']:
-            print url
-    except:  # TODO: RateCapEncountered
+            pass
+    except RateCapException:
         return {
             'all_data': fitbit_data,
             'rate_cap_encountered': True,
@@ -285,8 +315,10 @@ def create_datafiles(access_token, task_id=None, update_url=None, **kwargs):
 
     for file_info in temp_files:
         print 'File info: {}'.format(str(file_info))
+
         filename = file_info['temp_filename']
         file_tempdir = file_info['tempdir']
+
         output_path = mv_tempfile_to_output(
             os.path.join(file_tempdir, filename), filename, **kwargs)
 
@@ -306,10 +338,13 @@ def create_datafiles(access_token, task_id=None, update_url=None, **kwargs):
     task_data = {'task_id': task_id,
                  's3_keys': [df['s3_key'] for df in data_files],
                  'data_files': data_files}
+
     status_msg = ('Updating main site ({}) with completed files for task_id={}'
                   ' with task_data:\n{}'.format(
                       update_url, task_id, json.dumps(task_data)))
+
     print status_msg
+
     requests.post(update_url, json={'task_data': task_data})
 
 
