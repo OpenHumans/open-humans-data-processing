@@ -22,7 +22,7 @@ Flask-SQLAlchemy==2.1
 Flask-SSLify==0.1.5
 Flask==0.11               # via flask-sqlalchemy, flask-sslify, raven
 gevent==1.1.1
-greenlet==0.4.9           # via gevent
+greenlet==0.4.10          # via gevent
 itsdangerous==0.24        # via flask
 Jinja2==2.8               # via flask
 kombu==3.0.35             # via celery
@@ -31,13 +31,14 @@ Mako==1.0.4               # via alembic
 MarkupSafe==0.23          # via jinja2, mako
 matplotlib==1.5.1
 nose==1.3.7
-numpy==1.11.0             # via matplotlib
-pip-tools==1.6.5
+numpy==1.11.1             # via matplotlib
+pip-tools==1.7.0
 psycopg2==2.6.1
-pyparsing==2.1.4          # via matplotlib
+pyparsing==2.1.5          # via matplotlib
 python-dateutil==2.5.3    # via matplotlib
-python-editor==1.0        # via alembic
+python-editor==1.0.1      # via alembic
 pytz==2016.4              # via celery, matplotlib
+PyVCF==0.6.8
 raven[flask]==5.19.0
 requests==2.10.0
 six==1.10.0               # via cycler, pip-tools, python-dateutil
@@ -45,3 +46,7 @@ SQLAlchemy==1.0.13        # via alembic, flask-sqlalchemy
 twobitreader==3.1.0       # via cgivar2gvcf
 uWSGI==2.0.13.1
 Werkzeug==0.11.10         # via flask
+
+# The following packages are commented out because they are
+# considered to be unsafe in a requirements file:
+# setuptools                # via pyvcf
