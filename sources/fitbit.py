@@ -141,7 +141,11 @@ def fitbit_query(access_token, path, parameters=None):
     if not parameters:
         parameters = {}
 
-    headers = {'Authorization': 'Bearer %s' % access_token}
+    headers = {
+        'Authorization': 'Bearer %s' % access_token,
+        # Required for American units (miles, pounds)
+        'Accept-Language': 'en_US',
+    }
 
     path = path.format(**parameters)
     data_url = 'https://api.fitbit.com/1/user{}'.format(path)
@@ -156,6 +160,9 @@ def fitbit_query(access_token, path, parameters=None):
         return cached_response.response
 
     data_response = requests.get(data_url, headers=headers)
+
+    if 'errors' in data_response:
+        raise Exception(data_response['errors'])
 
     # If a rate cap is encountered, return a result reporting this.
     if data_response.status_code == 429:
