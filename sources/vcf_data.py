@@ -9,6 +9,7 @@ see LICENSE.TXT for full license text.
 import bz2
 import json
 import os
+import shutil
 import tempfile
 import vcf
 
@@ -44,11 +45,8 @@ def verify_vcf(input_filepath, sentry=None, username=None):
     elif input_filepath.endswith('.vcf'):
         input_vcf = vcf.Reader(filename=input_filepath)
     else:
-        if sentry:
-            sentry_msg = ('vcf_data: input file does not appear to be VCF. '
-                          'Username: {}'.format(username))
-            sentry.captureMessage(sentry_msg)
-        raise ValueError('Input file does not appear to be VCF.')
+        raise ValueError("Input filename doesn't match .vcf, .vcf.gz, "
+                         'or .vcf.bz2')
     # Check that it can advance one record without error.
     input_vcf.next()
     return input_vcf.metadata
@@ -81,7 +79,16 @@ def create_datafiles(username, vcf_data=None, task_id=None, update_url=None,
             vcf_data_item[1]['vcf_file']['url'], tempdir)
         input_file = os.path.join(tempdir, filename)
 
-        header_data = verify_vcf(input_file, sentry, username)
+        try:
+            header_data = verify_vcf(input_file, sentry, username)
+        except Exception, e:
+            error_msg = (
+                'vcf_data: error in processing! '
+                'File URL: {0}, Username: {1}, Error: "{2}"'.format(
+                    vcf_data_item[1]['vcf_file']['url'], username, e))
+            if sentry:
+                sentry.captureMessage(error_msg)
+            continue
 
         metadata = {
             'description': 'User-contributed VCF data',
@@ -134,7 +141,7 @@ def create_datafiles(username, vcf_data=None, task_id=None, update_url=None,
 
     print 'Finished moving all datasets to permanent storage.'
 
-    os.rmdir(tempdir)
+    shutil.rmtree(tempdir)
 
     if not (task_id and update_url):
         return
