@@ -40,9 +40,6 @@ else:
     from models import db  # noqa
 
 fitbit_urls = [
-    # general user data
-    {'name': 'profile', 'url': '/-/profile.json', 'period': None},
-
     # Requires the 'settings' scope, which we haven't asked for
     # {'name': 'devices', 'url': '/-/devices.json', 'period': None},
 
@@ -185,8 +182,25 @@ def get_fitbit_data(access_token, open_humans_id):
         'all_data': data from all items, or None if rate cap hit.
         'rate_cap_encountered': None, or True if rate cap hit.
     """
-    fitbit_data = {}
-    user_id = None
+    query_result = fitbit_query(access_token=access_token,
+                                path='/-/profile.json',
+                                open_humans_id=open_humans_id)
+
+    # store the user ID since it's used in all future queries
+    user_id = query_result['user']['encodedId']
+    member_since = query_result['user']['memberSince']
+
+    fitbit_data = {
+        'profile': {
+            'averageDailySteps': query_result['user']['averageDailySteps'],
+            'encodedId': user_id,
+            'height': query_result['user']['height'],
+            'memberSince': member_since,
+            'strideLengthRunning': query_result['user']['strideLengthRunning'],
+            'strideLengthWalking': query_result['user']['strideLengthWalking'],
+            'weight': query_result['user']['weight'],
+        },
+    }
 
     try:
         for url in [url for url in fitbit_urls if url['period'] is None]:
@@ -201,7 +215,6 @@ def get_fitbit_data(access_token, open_humans_id):
             fitbit_data[url['name']] = query_result
 
         for url in [url for url in fitbit_urls if url['period'] == 'year']:
-            member_since = fitbit_data['profile']['user']['memberSince']
             start_year = arrow.get(member_since, 'YYYY-MM-DD').year
             current_year = arrow.get().year
 
@@ -222,8 +235,6 @@ def get_fitbit_data(access_token, open_humans_id):
                 fitbit_data[url['name']].append(query_result)
 
         for url in [url for url in fitbit_urls if url['period'] == 'month']:
-            member_since = fitbit_data['profile']['user']['memberSince']
-
             start_date = arrow.get(member_since, 'YYYY-MM-DD')
             today_date = arrow.get()
 
@@ -356,7 +367,7 @@ def create_datafiles(user_id, task_id=None, update_url=None, **kwargs):
 
 def cli_get_data():
     if len(sys.argv) != 3:
-        print 'Please specify a token and directory.'
+        print 'Please specify a user ID and directory.'
 
         sys.exit(1)
 
