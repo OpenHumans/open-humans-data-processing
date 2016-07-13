@@ -133,7 +133,7 @@ class RateCapException(Exception):
     pass
 
 
-def fitbit_query(access_token, path, parameters=None):
+def fitbit_query(access_token, path, open_humans_id, parameters=None):
     """
     Query Fitbit API and return result.
     """
@@ -148,7 +148,7 @@ def fitbit_query(access_token, path, parameters=None):
 
     path = path.format(**parameters)
     data_url = 'https://api.fitbit.com/1/user{}'.format(path)
-    data_key = '{}{}'.format(data_url, access_token)
+    data_key = '{}-{}'.format(data_url, open_humans_id)
 
     cached_response = (CacheItem.query
                        .filter_by(key=data_key)
@@ -175,7 +175,7 @@ def fitbit_query(access_token, path, parameters=None):
     return query_result
 
 
-def get_fitbit_data(access_token):
+def get_fitbit_data(access_token, open_humans_id):
     """
     Iterate to get all items for a given access_token and path, return result.
 
@@ -193,7 +193,8 @@ def get_fitbit_data(access_token):
 
             query_result = fitbit_query(access_token=access_token,
                                         path=url['url'],
-                                        parameters={'user_id': user_id})
+                                        parameters={'user_id': user_id},
+                                        open_humans_id=open_humans_id)
 
             fitbit_data[url['name']] = query_result
 
@@ -213,7 +214,8 @@ def get_fitbit_data(access_token):
                     parameters={
                         'user_id': user_id,
                         'date': '{}-01-01'.format(year),
-                    })
+                    },
+                    open_humans_id=open_humans_id)
 
                 fitbit_data[url['name']].append(query_result)
 
@@ -251,7 +253,8 @@ def get_fitbit_data(access_token):
                     parameters={
                         'user_id': user_id,
                         'date': '{}-{:02d}-01'.format(year, month),
-                    })
+                    },
+                    open_humans_id=open_humans_id)
 
                 fitbit_data[url['name']].append(query_result)
 
@@ -302,17 +305,10 @@ def create_datafiles(user_id, task_id=None, update_url=None, **kwargs):
 
     access_token = get_fresh_token(user_id, provider='fitbit')
 
-    fitbit_data = get_fitbit_data(access_token)
+    fitbit_data = get_fitbit_data(access_token, user_id)
 
     if fitbit_data['rate_cap_encountered']:
-        # If this is previously called and we got no new data this round,
-        # double the wait period for resubmission.
-        if 'return_status' in kwargs and not fitbit_data['all_data']:
-            countdown = 2 * kwargs['return_status']['countdown']
-        else:
-            countdown = 60
-
-        return {'countdown': countdown}
+        return {'countdown': 60}
 
     user_data = fitbit_data['all_data']
 
