@@ -43,7 +43,8 @@ fitbit_urls = [
     # general user data
     {'name': 'profile', 'url': '/-/profile.json', 'period': None},
 
-    {'name': 'devices', 'url': '/-/devices.json', 'period': None},
+    # Requires the 'settings' scope, which we haven't asked for
+    # {'name': 'devices', 'url': '/-/devices.json', 'period': None},
 
     {'name': 'activities-overview',
      'url': '/{user_id}/activities.json',
@@ -160,14 +161,15 @@ def fitbit_query(access_token, path, open_humans_id, parameters=None):
 
     data_response = requests.get(data_url, headers=headers)
 
-    if 'errors' in data_response:
-        raise Exception(data_response['errors'])
-
     # If a rate cap is encountered, return a result reporting this.
     if data_response.status_code == 429:
         raise RateCapException()
 
     query_result = data_response.json()
+
+    if ('errors' in query_result and 'success' in query_result
+            and not query_result['success']):
+        raise Exception(query_result['errors'])
 
     db.session.add(CacheItem(data_key, query_result))
     db.session.commit()
