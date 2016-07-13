@@ -19,8 +19,6 @@ a data set for the user in that directory:
 
 from __future__ import unicode_literals
 
-# from datetime import date, datetime
-
 import json
 import os
 import sys
@@ -32,6 +30,7 @@ import requests
 
 from data_retrieval.files import mv_tempfile_to_output
 from models import CacheItem
+from utilities import get_fresh_token
 
 if __name__ == '__main__':
     from utilities import init_db
@@ -271,12 +270,12 @@ def get_fitbit_data(access_token):
     }
 
 
-def create_datafiles(access_token, task_id=None, update_url=None, **kwargs):
+def create_datafiles(user_id, task_id=None, update_url=None, **kwargs):
     """
     Create Open Humans Dataset from Fitbit API data
 
     Required arguments:
-        access_token: Fitbit access token
+        user_id: Open Humans user ID
 
     Optional arguments:
         filedir: Local filepath, folder in which to place the resulting file.
@@ -300,6 +299,8 @@ def create_datafiles(access_token, task_id=None, update_url=None, **kwargs):
             'tags': ['weight', 'Fitbit', 'steps', 'activity'],
         }
     }]
+
+    access_token = get_fresh_token(user_id, provider='fitbit')
 
     fitbit_data = get_fitbit_data(access_token)
 
