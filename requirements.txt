@@ -4,6 +4,7 @@
 #
 #    pip-compile --output-file requirements.txt requirements.in
 #
+-e git+https://github.com/beaugunderson/requests-respectful#egg=requests-respectful
 amqp==1.4.9               # via kombu
 anyjson==0.3.3            # via kombu
 arrow==0.8.0
@@ -34,9 +35,11 @@ pip-tools==1.7.0
 psycopg2==2.6.1
 pyparsing==2.1.5          # via matplotlib
 python-dateutil==2.5.3    # via arrow, matplotlib
-pytz==2016.4              # via celery, matplotlib
+pytz==2016.6.1            # via celery, matplotlib
 PyVCF==0.6.8
+PyYaml==3.11
 raven[flask]==5.19.0
+redis==2.10.5
 requests==2.10.0
 six==1.10.0               # via cycler, pip-tools, python-dateutil
 SQLAlchemy==1.0.13        # via flask-sqlalchemy

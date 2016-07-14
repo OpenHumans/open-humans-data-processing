@@ -1,3 +1,5 @@
+-e git+https://github.com/beaugunderson/requests-respectful#egg=requests-respectful
+
 arrow==0.8.0
 beautifulsoup4==4.4.1
 boto==2.40.0
