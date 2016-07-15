@@ -24,12 +24,13 @@ import os
 import sys
 import tempfile
 import time
-import urlparse
+# import urlparse
 
 import arrow
+import requests
 
-from requests_respectful import (RespectfulRequester,
-                                 RequestsRespectfulRateLimitedError)
+# from requests_respectful import (RespectfulRequester,
+#                                  RequestsRespectfulRateLimitedError)
 
 from data_retrieval.files import mv_tempfile_to_output
 from models import CacheItem
@@ -42,23 +43,23 @@ if __name__ == '__main__':
 else:
     from models import db  # noqa
 
-redis_url = os.getenv('REDIS_URL', 'redis://localhost:6379')
-url = urlparse.urlparse(redis_url)
+# redis_url = os.getenv('REDIS_URL', 'redis://localhost:6379')
+# url = urlparse.urlparse(redis_url)
 
-print 'Connecting to redis at {}:{}, {}'.format(url.hostname, url.port,
-                                                url.password)
+# print 'Connecting to redis at {}:{}, {}'.format(url.hostname, url.port,
+#                                                 url.password)
 
-RespectfulRequester.configure(
-    redis={
-        'host': url.hostname,
-        'port': url.port,
-        'password': url.password,
-        'database': 0,
-    },
-    safety_threshold=5)
+# RespectfulRequester.configure(
+#     redis={
+#         'host': url.hostname,
+#         'port': url.port,
+#         'password': url.password,
+#         'database': 0,
+#     },
+#     safety_threshold=5)
 
-requests = RespectfulRequester()
-requests.register_realm('fitbit', max_requests=3600, timespan=60)
+# requests = RespectfulRequester()
+# requests.register_realm('fitbit', max_requests=3600, timespan=60)
 
 fitbit_urls = [
     # Requires the 'settings' scope, which we haven't asked for
@@ -182,8 +183,8 @@ def fitbit_query(access_token, path, open_humans_id, parameters=None):
     try:
         data_response = requests.get(
             data_url,
-            headers=headers,
-            realms=['fitbit', 'fitbit-{}'.format(open_humans_id)])
+            headers=headers)
+            # realms=['fitbit', 'fitbit-{}'.format(open_humans_id)])
     except RequestsRespectfulRateLimitedError:
         raise RateLimitException()
 
@@ -211,8 +212,8 @@ def get_fitbit_data(access_token, open_humans_id):
         'all_data': data from all items, or None if rate cap hit.
         'rate_cap_encountered': None, or True if rate cap hit.
     """
-    requests.register_realm('fitbit-{}'.format(open_humans_id),
-                            max_requests=3600, timespan=60)
+    # requests.register_realm('fitbit-{}'.format(open_humans_id),
+    #                         max_requests=3600, timespan=60)
 
     query_result = fitbit_query(access_token=access_token,
                                 path='/-/profile.json',
