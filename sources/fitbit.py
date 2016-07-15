@@ -182,7 +182,7 @@ def fitbit_query(access_token, path, open_humans_id, parameters=None):
     try:
         data_response = requests.get(
             data_url,
-            headers=headers)
+            headers=headers,
             realms=['fitbit', 'fitbit-{}'.format(open_humans_id)])
     except RequestsRespectfulRateLimitedError:
         raise RateLimitException()
