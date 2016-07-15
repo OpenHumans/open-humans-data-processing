@@ -251,10 +251,10 @@ def get_fitbit_data(access_token, open_humans_id):
             start_year = arrow.get(member_since, 'YYYY-MM-DD').year
             current_year = arrow.get().year
 
+            fitbit_data[url['name']] = []
+
             for year in xrange(start_year, current_year + 1):
                 print 'retrieving {}: {}'.format(url['name'], year)
-
-                fitbit_data[url['name']] = []
 
                 query_result = fitbit_query(
                     access_token=access_token,
@@ -288,10 +288,10 @@ def get_fitbit_data(access_token, open_humans_id):
                 dates += [(year, month) for month
                           in range(start_month, end_month + 1)]
 
+            fitbit_data[url['name']] = []
+
             for year, month in dates:
                 print 'retrieving {}: {}, {}'.format(url['name'], year, month)
-
-                fitbit_data[url['name']] = []
 
                 query_result = fitbit_query(
                     access_token=access_token,
