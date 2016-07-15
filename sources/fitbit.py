@@ -24,9 +24,12 @@ import os
 import sys
 import tempfile
 import time
+import urlparse
 
 import arrow
-import requests
+
+from requests_respectful import (RespectfulRequester,
+                                 RequestsRespectfulRateLimitedError)
 
 from data_retrieval.files import mv_tempfile_to_output
 from models import CacheItem
@@ -38,6 +41,21 @@ if __name__ == '__main__':
     db = init_db()
 else:
     from models import db  # noqa
+
+redis_url = os.getenv('REDIS_URL', 'redis://localhost:6379')
+url = urlparse.urlparse(redis_url)
+
+RespectfulRequester.configure(
+    redis={
+        'host': url.hostname,
+        'port': url.port,
+        'password': url.password,
+        'database': 0,
+    },
+    safety_threshold=5)
+
+requests = RespectfulRequester()
+requests.register_realm('fitbit', max_requests=3600, timespan=60)
 
 fitbit_urls = [
     # Requires the 'settings' scope, which we haven't asked for
@@ -122,11 +140,13 @@ fitbit_urls = [
 ]
 
 
-class RateCapException(Exception):
+class RateLimitException(Exception):
     """
-    An exception that is raised if the Fitbit API tells us we've reached the
-    request rate cap.
+    An exception that is raised if we reach a request rate cap.
     """
+
+    # TODO: add the source of the rate limit we hit for logging (fitit,
+    # internal global fitbit, internal user-specific fitbit)
 
     pass
 
@@ -156,11 +176,17 @@ def fitbit_query(access_token, path, open_humans_id, parameters=None):
     if cached_response:
         return cached_response.response
 
-    data_response = requests.get(data_url, headers=headers)
+    try:
+        data_response = requests.get(
+            data_url,
+            headers=headers,
+            realms=['fitbit', 'fitbit-{}'.format(open_humans_id)])
+    except RequestsRespectfulRateLimitedError:
+        raise RateLimitException()
 
     # If a rate cap is encountered, return a result reporting this.
     if data_response.status_code == 429:
-        raise RateCapException()
+        raise RateLimitException()
 
     query_result = data_response.json()
 
@@ -182,6 +208,9 @@ def get_fitbit_data(access_token, open_humans_id):
         'all_data': data from all items, or None if rate cap hit.
         'rate_cap_encountered': None, or True if rate cap hit.
     """
+    requests.register_realm('fitbit-{}'.format(open_humans_id),
+                            max_requests=3600, timespan=60)
+
     query_result = fitbit_query(access_token=access_token,
                                 path='/-/profile.json',
                                 open_humans_id=open_humans_id)
@@ -274,7 +303,7 @@ def get_fitbit_data(access_token, open_humans_id):
         # TODO: implement these once we're approved for Fitbit intraday access
         for url in [url for url in fitbit_urls if url['period'] == 'day']:
             pass
-    except RateCapException:
+    except RateLimitException:
         return {
             'all_data': fitbit_data,
             'rate_cap_encountered': True,
