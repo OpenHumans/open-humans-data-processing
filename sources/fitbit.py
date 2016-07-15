@@ -45,6 +45,9 @@ else:
 redis_url = os.getenv('REDIS_URL', 'redis://localhost:6379')
 url = urlparse.urlparse(redis_url)
 
+print 'Connecting to redis at {}:{}, {}'.format(url.hostname, url.port,
+                                                url.password)
+
 RespectfulRequester.configure(
     redis={
         'host': url.hostname,
