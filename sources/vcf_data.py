@@ -74,9 +74,9 @@ def create_datafiles(username, vcf_data=None, task_id=None, update_url=None,
     if not vcf_data:
         raise Exception('`vcf_data` parameter missing')
 
-    for vcf_data_item in enumerate(vcf_data):
+    for vcf_data_item in vcf_data:
         filename = get_remote_file(
-            vcf_data_item[1]['vcf_file']['url'], tempdir)
+            vcf_data_item['vcf_file']['url'], tempdir)
         input_file = os.path.join(tempdir, filename)
 
         try:
@@ -85,17 +85,18 @@ def create_datafiles(username, vcf_data=None, task_id=None, update_url=None,
             error_msg = (
                 'vcf_data: error in processing! '
                 'File URL: {0}, Username: {1}, Error: "{2}"'.format(
-                    vcf_data_item[1]['vcf_file']['url'], username, e))
+                    vcf_data_item['vcf_file']['url'], username, e))
             if sentry:
                 sentry.captureMessage(error_msg)
             continue
 
         metadata = {
             'description': 'User-contributed VCF data',
-            'tags': ['vcf']
+            'tags': ['vcf'],
+            'vcf_source': vcf_data_item['vcf_source'],
         }
-        if vcf_data_item[1]['additional_notes']:
-            metadata['user_notes'] = vcf_data_item[1]['additional_notes']
+        if vcf_data_item['additional_notes']:
+            metadata['user_notes'] = vcf_data_item['additional_notes']
         temp_files.append({
             'temp_filename': filename,
             'tempdir': tempdir,
