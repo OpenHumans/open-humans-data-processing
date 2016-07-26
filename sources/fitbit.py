@@ -27,6 +27,7 @@ import time
 import urlparse
 
 import arrow
+import requests as raw_requests
 
 from requests_respectful import (RespectfulRequester,
                                  RequestsRespectfulRateLimitedError)
@@ -394,7 +395,7 @@ def create_datafiles(user_id, task_id=None, update_url=None, **kwargs):
 
     print status_msg
 
-    requests.post(update_url, json={'task_data': task_data})
+    raw_requests.post(update_url, json={'task_data': task_data})
 
 
 def cli_get_data():
