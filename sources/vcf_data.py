@@ -76,7 +76,7 @@ def standardize_vcf(input_filepath, base_filename, tempdir):
 
 
 def create_datafiles(username, vcf_data=None, task_id=None, update_url=None,
-                     sentry=None, **kwargs):
+                     sentry=None, tempdir=None, **kwargs):
     """
     Process user-contributed VCF data (uploaded files)
 
@@ -90,7 +90,8 @@ def create_datafiles(username, vcf_data=None, task_id=None, update_url=None,
     For output: iither 'filedir' (and no S3 arguments), or both
     's3_bucket_name' and 's3_key_dir' (and no 'filedir') must be specified.
     """
-    tempdir = tempfile.mkdtemp()
+    if not tempdir:
+        tempdir = tempfile.mkdtemp()
     temp_files = []
     data_files = []
 

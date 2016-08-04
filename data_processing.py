@@ -9,6 +9,8 @@ import json
 import logging
 import os
 import pkgutil
+import shutil
+import tempfile
 
 from functools import partial
 
@@ -192,6 +194,13 @@ def task_postrun_handler_cb(sender=None, state=None, kwargs=None, retval=None,
         logging.info('Not updating, this task has been resubmitted.')
         return
 
+    # Clean up after tasks that may have failed.
+    if 'tempdir' in kwargs:
+        try:
+            shutil.rmtree(kwargs['tempdir'])
+        except OSError:
+            pass
+
     update_url = kwargs.get('update_url')
     task_id = kwargs.get('task_id')
 
@@ -261,7 +270,8 @@ def datafiles_task(name, **task_params):
 def generic_handler(name):
     logging.info('POST JSON: %s', debug_json(request.json))
 
-    datafiles_task.delay(name, **request.json['task_params'])
+    tempdir = tempfile.mkdtemp()
+    datafiles_task.delay(name, tempdir=tempdir, **request.json['task_params'])
 
     return '{} dataset started'.format(name)
 
