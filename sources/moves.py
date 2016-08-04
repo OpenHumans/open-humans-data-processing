@@ -187,9 +187,7 @@ def create_datafiles(access_token, task_id=None, update_url=None, **kwargs):
     if not (task_id and update_url):
         return
 
-    task_data = {'task_id': task_id,
-                 's3_keys': [df['s3_key'] for df in data_files],
-                 'data_files': data_files}
+    task_data = {'task_id': task_id, 'data_files': data_files}
     status_msg = ('Updating main site ({}) with completed files for task_id={}'
                   ' with task_data:\n{}'.format(
                       update_url, task_id, json.dumps(task_data)))

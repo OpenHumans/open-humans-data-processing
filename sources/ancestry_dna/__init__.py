@@ -28,8 +28,6 @@ from datetime import date, datetime
 
 import requests
 
-from boto.s3.connection import S3Connection
-
 from data_retrieval.files import get_remote_file, mv_tempfile_to_output
 from data_retrieval.sort_vcf import sort_vcf
 
@@ -73,19 +71,6 @@ CHROM_MAP = {
     '24': 'Y',
     '25': 'X',
 }
-
-
-def s3_connection():
-    """
-    Get an S3 connection using environment variables.
-    """
-    key = os.getenv('AWS_ACCESS_KEY_ID')
-    secret = os.getenv('AWS_SECRET_ACCESS_KEY')
-
-    if not (key and secret):
-        raise Exception('You must specify AWS credentials.')
-
-    return S3Connection(key, secret)
 
 
 def vcf_header(source=None, reference=None, format_info=None):
@@ -404,9 +389,7 @@ def create_datafiles(username, input_file=None, file_url=None, task_id=None,
     if not (task_id and update_url):
         return
 
-    task_data = {'task_id': task_id,
-                 's3_keys': [df['s3_key'] for df in data_files],
-                 'data_files': data_files}
+    task_data = {'task_id': task_id, 'data_files': data_files}
     status_msg = ('Updating main site ({}) with completed files for task_id={}'
                   ' with task_data:\n{}'.format(
                       update_url, task_id, json.dumps(task_data)))

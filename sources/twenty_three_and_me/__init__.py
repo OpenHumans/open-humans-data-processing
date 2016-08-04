@@ -29,8 +29,6 @@ from datetime import date, datetime
 
 import requests
 
-from boto.s3.connection import S3Connection
-
 from data_retrieval.files import get_remote_file, mv_tempfile_to_output
 
 REF_23ANDME_FILE = os.path.join(os.path.dirname(__file__), 'reference_b37.txt')
@@ -41,19 +39,6 @@ REFERENCE_GENOME_URL = ('http://hgdownload-test.cse.ucsc.edu/' +
 
 VCF_FIELDS = ['CHROM', 'POS', 'ID', 'REF', 'ALT', 'QUAL', 'FILTER',
               'INFO', 'FORMAT', '23ANDME_DATA']
-
-
-def s3_connection():
-    """
-    Get an S3 connection using environment variables.
-    """
-    key = os.getenv('AWS_ACCESS_KEY_ID')
-    secret = os.getenv('AWS_SECRET_ACCESS_KEY')
-
-    if not (key and secret):
-        raise Exception('You must specify AWS credentials.')
-
-    return S3Connection(key, secret)
 
 
 def vcf_header(source=None, reference=None, format_info=None):
@@ -337,9 +322,7 @@ def create_datafiles(username, input_file=None, file_url=None, task_id=None,
     if not (task_id and update_url):
         return
 
-    task_data = {'task_id': task_id,
-                 's3_keys': [df['s3_key'] for df in data_files],
-                 'data_files': data_files}
+    task_data = {'task_id': task_id, 'data_files': data_files}
     status_msg = ('Updating main site ({}) with completed files for task_id={}'
                   ' with task_data:\n{}'.format(
                       update_url, task_id, json.dumps(task_data)))

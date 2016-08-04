@@ -122,7 +122,6 @@ class BaseSource(object):
             'oh_member_id': self.oh_member_id,
             'oh_user_id': self.oh_user_id,
             'oh_source': self.oh_source,
-            's3_keys': [data_file['s3_key'] for data_file in self.data_files],
         }
 
         # status_msg = ('Updating main site ({}) with completed files'

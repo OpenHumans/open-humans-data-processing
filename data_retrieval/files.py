@@ -2,38 +2,23 @@ import os
 import re
 import urlparse
 
-from datetime import datetime
-
 import requests
 
 from boto.s3.connection import S3Connection
-
-
-def now_string():
-    """
-    Return the current date and time in a format suitable for a filename.
-
-    This is ISO 8601 without the optional date dashes and time colons.
-    """
-    return datetime.utcnow().strftime('%Y%m%dT%H%M%SZ')
-
-
-def s3_connection():
-    """
-    Get an S3 connection using environment variables.
-    """
-    key = os.getenv('AWS_ACCESS_KEY_ID')
-    secret = os.getenv('AWS_SECRET_ACCESS_KEY')
-    if not (key and secret):
-        raise Exception('You must specify AWS credentials.')
-    return S3Connection(key, secret)
 
 
 def copy_file_to_s3(bucket, keypath, filepath):
     """
     Copy a local file to S3.
     """
-    s3 = s3_connection()
+    key = os.getenv('AWS_ACCESS_KEY_ID')
+    secret = os.getenv('AWS_SECRET_ACCESS_KEY')
+
+    if not (key and secret):
+        raise Exception('You must specify AWS credentials.')
+
+    s3 = S3Connection(key, secret)
+
     bucket = s3.get_bucket(bucket)
     key = bucket.new_key(keypath)
     # Override MIME type for compressed files, which AWS sets automatically.

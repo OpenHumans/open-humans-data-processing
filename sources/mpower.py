@@ -21,22 +21,7 @@ import zipfile
 
 import requests
 
-from boto.s3.connection import S3Connection
-
 from data_retrieval.files import get_remote_file, mv_tempfile_to_output
-
-
-def s3_connection():
-    """
-    Get an S3 connection using environment variables.
-    """
-    key = os.getenv('AWS_ACCESS_KEY_ID')
-    secret = os.getenv('AWS_SECRET_ACCESS_KEY')
-
-    if not (key and secret):
-        raise Exception('You must specify AWS credentials.')
-
-    return S3Connection(key, secret)
 
 
 def verify_mpower(input_filepath, sentry=None, username=None):
@@ -138,11 +123,7 @@ def create_datafiles(username, input_file=None, file_url=None, task_id=None,
     if not (task_id and update_url):
         return
 
-    task_data = {
-        'task_id': task_id,
-        's3_keys': [data_file['s3_key'] for data_file in data_files],
-        'data_files': data_files
-    }
+    task_data = {'task_id': task_id, 'data_files': data_files}
 
     requests.post(update_url, json={'task_data': task_data})
 
