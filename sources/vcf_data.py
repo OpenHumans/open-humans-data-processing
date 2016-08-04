@@ -114,7 +114,7 @@ def create_datafiles(username, vcf_data=None, task_id=None, update_url=None,
             json.dump(header_data, f)
         metadata = {
             'description': 'VCF file metadata',
-            'tags': ['vcf']
+            'tags': ['json']
         }
         temp_files.append({
             'temp_filename': metadata_filename,
