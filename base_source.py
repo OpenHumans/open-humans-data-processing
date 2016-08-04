@@ -45,6 +45,7 @@ class BaseSource(object):
         self.oh_member_id = oh_member_id
         self.oh_update_url = oh_update_url
         self.oh_user_id = oh_user_id
+        self.output_directory = output_directory
         self.sentry = sentry
         self.s3_key_dir = s3_key_dir
         self.s3_bucket_name = s3_bucket_name

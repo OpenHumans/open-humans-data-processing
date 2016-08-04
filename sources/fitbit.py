@@ -361,6 +361,8 @@ class FitbitSource(BaseSource):
             else:
                 break
 
+        self.move_files()
+
 
 if __name__ == '__main__':
     if len(sys.argv) != 3:
