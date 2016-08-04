@@ -68,7 +68,7 @@ class BaseSource(object):
         response = requests.post(
             OPEN_HUMANS_TOKEN_REFRESH_URL,
             params={'key': PRE_SHARED_KEY},
-            data={'user_id': self.oh_user_id, 'provider': self.provider})
+            data={'user_id': self.oh_user_id, 'provider': self.oh_provider})
 
         try:
             result = response.json()
@@ -121,7 +121,7 @@ class BaseSource(object):
             'data_files': self.data_files,
             'oh_member_id': self.oh_member_id,
             'oh_user_id': self.oh_user_id,
-            'oh_source': self.source,
+            'oh_source': self.oh_source,
             's3_keys': [data_file['s3_key'] for data_file in self.data_files],
         }
 

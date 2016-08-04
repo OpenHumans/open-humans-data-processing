@@ -320,8 +320,8 @@ class FitbitSource(BaseSource):
     Create an Open Humans Dataset from Fitbit API data.
     """
 
-    provider = 'fitbit'
-    source = 'fitbit'
+    oh_provider = 'fitbit'
+    oh_source = 'fitbit'
 
     def create_files(self):
         filename = 'fitbit-data.json'
