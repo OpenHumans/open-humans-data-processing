@@ -1,11 +1,12 @@
-from datetime import datetime
 import os
 import re
-import shutil
 import urlparse
 
-from boto.s3.connection import S3Connection
+from datetime import datetime
+
 import requests
+
+from boto.s3.connection import S3Connection
 
 
 def now_string():
@@ -97,23 +98,3 @@ def get_remote_file(url, tempdir):
     temp_file.close()
 
     return specified_filename
-
-
-def mv_tempfile_to_output(filepath, filename, **kwargs):
-    """
-    Copy a temp file to S3 or local permanent directory, then delete temp copy.
-    """
-    if 's3_key_dir' in kwargs and 's3_bucket_name' in kwargs:
-        keypath = os.path.join(kwargs['s3_key_dir'], filename)
-        copy_file_to_s3(
-            bucket=kwargs['s3_bucket_name'],
-            keypath=keypath,
-            filepath=filepath)
-        output_path = keypath
-    elif 'filedir' in kwargs:
-        output_path = os.path.join(kwargs['filedir'], filename)
-        shutil.copy(filepath, output_path)
-    else:
-        raise ValueError('Must specify S3 key & bucket, or local filedir.')
-    os.remove(filepath)
-    return output_path

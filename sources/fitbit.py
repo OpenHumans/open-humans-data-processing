@@ -8,11 +8,9 @@ see LICENSE.TXT for full license text.
 
 May be used on the command line from this project's base directory, e.g.
 
-   foreman run python -m sources.fitbit <access token> files/
+   foreman run python -m sources.fitbit <user_id> files/
 
-...where <access token> is the private token the Fitbit API has created that
-grants permission to access a user's data. (Keep it safe!) This will assemble
-a data set for the user in that directory:
+This will assemble a data set for the user in that directory:
 
    files/fitbit-storyline-data.tar.gz
 """
@@ -22,19 +20,16 @@ from __future__ import unicode_literals
 import json
 import os
 import sys
-import tempfile
 import time
 import urlparse
 
 import arrow
-import requests as raw_requests
 
 from requests_respectful import (RespectfulRequester,
                                  RequestsRespectfulRateLimitedError)
 
-from data_retrieval.files import mv_tempfile_to_output
+from base_source import BaseSource
 from models import CacheItem
-from utilities import get_fresh_token
 
 if __name__ == '__main__':
     from utilities import init_db
@@ -44,16 +39,17 @@ else:
     from models import db  # noqa
 
 redis_url = os.getenv('REDIS_URL', 'redis://localhost:6379')
-url = urlparse.urlparse(redis_url)
+url_object = urlparse.urlparse(redis_url)
 
-print 'Connecting to redis at {}:{}, {}'.format(url.hostname, url.port,
-                                                url.password)
+print 'Connecting to redis at {}:{}, {}'.format(url_object.hostname,
+                                                url_object.port,
+                                                url_object.password)
 
 RespectfulRequester.configure(
     redis={
-        'host': url.hostname,
-        'port': url.port,
-        'password': url.password,
+        'host': url_object.hostname,
+        'port': url_object.port,
+        'password': url_object.password,
         'database': 0,
     },
     safety_threshold=5)
@@ -236,7 +232,7 @@ def get_fitbit_data(access_token, open_humans_id):
     }
 
     try:
-        for url in [url for url in fitbit_urls if url['period'] is None]:
+        for url in [u for u in fitbit_urls if u['period'] is None]:
             if not user_id and 'profile' in fitbit_data:
                 user_id = fitbit_data['profile']['user']['encodedId']
 
@@ -247,7 +243,7 @@ def get_fitbit_data(access_token, open_humans_id):
 
             fitbit_data[url['name']] = query_result
 
-        for url in [url for url in fitbit_urls if url['period'] == 'year']:
+        for url in [u for u in fitbit_urls if u['period'] == 'year']:
             start_year = arrow.get(member_since, 'YYYY-MM-DD').year
             current_year = arrow.get().year
 
@@ -267,7 +263,7 @@ def get_fitbit_data(access_token, open_humans_id):
 
                 fitbit_data[url['name']].append(query_result)
 
-        for url in [url for url in fitbit_urls if url['period'] == 'month']:
+        for url in [u for u in fitbit_urls if u['period'] == 'month']:
             start_date = arrow.get(member_since, 'YYYY-MM-DD')
             today_date = arrow.get()
 
@@ -319,104 +315,61 @@ def get_fitbit_data(access_token, open_humans_id):
     }
 
 
-def create_datafiles(user_id, task_id=None, update_url=None, **kwargs):
+class FitbitSource(BaseSource):
     """
-    Create Open Humans Dataset from Fitbit API data
-
-    Required arguments:
-        user_id: Open Humans user ID
-
-    Optional arguments:
-        filedir: Local filepath, folder in which to place the resulting file.
-        s3_bucket_name: S3 bucket to write resulting file.
-        s3_key_dir: S3 key "directory" to write resulting file. The full S3 key
-                    name will add a filename to the end of s3_key_dir.
-
-    Either 'filedir' (and no S3 arguments), or both S3 arguments (and no
-    'filedir') must be specified.
+    Create an Open Humans Dataset from Fitbit API data.
     """
-    tempdir = tempfile.mkdtemp()
-    filename = 'fitbit-data.json'
-    filepath = os.path.join(tempdir, filename)
-    data_files = []
 
-    temp_files = [{
-        'temp_filename': filename,
-        'tempdir': tempdir,
-        'metadata': {
-            'description': ('Fitbit activity, health, and fitness data.'),
-            'tags': ['weight', 'Fitbit', 'steps', 'activity'],
-        }
-    }]
+    provider = 'fitbit'
+    source = 'fitbit'
 
-    access_token = get_fresh_token(user_id, provider='fitbit')
+    def create_files(self):
+        filename = 'fitbit-data.json'
+        filepath = os.path.join(self.temp_directory, filename)
 
-    fitbit_data = get_fitbit_data(access_token, user_id)
+        self.temp_files.append({
+            'tmp_filename': filename,
+            'metadata': {
+                'description': ('Fitbit activity, health, and fitness data.'),
+                'tags': ['weight', 'Fitbit', 'steps', 'activity'],
+            }
+        })
 
-    if fitbit_data['rate_cap_encountered']:
-        return {'countdown': 60}
+        fitbit_data = get_fitbit_data(self.refresh_token(), self.oh_user_id)
 
-    user_data = fitbit_data['all_data']
+        if fitbit_data['rate_cap_encountered']:
+            return {'countdown': 60}
 
-    with open(filepath, 'w') as f:
-        json.dump(user_data, f, indent=2)
+        user_data = fitbit_data['all_data']
 
-    print 'Finished creating Fitbit dataset locally.'
+        with open(filepath, 'w') as f:
+            json.dump(user_data, f, indent=2)
 
-    for file_info in temp_files:
-        print 'File info: {}'.format(str(file_info))
+        print 'Finished creating Fitbit dataset locally.'
 
-        filename = file_info['temp_filename']
-        file_tempdir = file_info['tempdir']
+    def cli(self):
+        while True:
+            result = self.create_files()
 
-        output_path = mv_tempfile_to_output(
-            os.path.join(file_tempdir, filename), filename, **kwargs)
+            if result:
+                countdown = result['countdown']
 
-        if 's3_key_dir' in kwargs and 's3_bucket_name' in kwargs:
-            data_files.append({
-                's3_key': output_path,
-                'metadata': file_info['metadata'],
-            })
+                print('Rate cap hit. Pausing {}s before resuming...'.format(
+                    countdown))
 
-    os.rmdir(tempdir)
-
-    print 'Finished moving Fitbit data to permanent storage.'
-
-    if not (task_id and update_url):
-        return
-
-    task_data = {'task_id': task_id,
-                 's3_keys': [df['s3_key'] for df in data_files],
-                 'data_files': data_files}
-
-    status_msg = ('Updating main site ({}) with completed files for task_id={}'
-                  ' with task_data:\n{}'.format(
-                      update_url, task_id, json.dumps(task_data)))
-
-    print status_msg
-
-    raw_requests.post(update_url, json={'task_data': task_data})
+                time.sleep(countdown)
+            else:
+                break
 
 
-def cli_get_data():
+if __name__ == '__main__':
     if len(sys.argv) != 3:
         print 'Please specify a user ID and directory.'
 
         sys.exit(1)
 
-    while True:
-        result = create_datafiles(*sys.argv[1:-1], filedir=sys.argv[-1])
+    fitbit = FitbitSource(oh_user_id=sys.argv[1],
+                          output_directory=sys.argv[2],
+                          local=True)
 
-        if result:
-            countdown = result['countdown']
-
-            print('Rate cap hit. Pausing {}s before resuming...'.format(
-                countdown))
-
-            time.sleep(countdown)
-        else:
-            break
-
-
-if __name__ == '__main__':
-    cli_get_data()
+    fitbit.cli()

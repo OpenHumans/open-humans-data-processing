@@ -1,0 +1,10 @@
+#/1/user/{user_id}/activities/date/[date].json
+
+scopes:
+
+activity
+heartrate
+profile
+sleep
+weight
+
