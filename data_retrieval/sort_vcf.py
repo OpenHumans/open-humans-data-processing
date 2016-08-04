@@ -96,9 +96,9 @@ CHROM_ORDER = {
 }
 
 
-def sort_vcf(input_file):
-    outputfile = tempfile.TemporaryFile()
-    sortingfile = tempfile.TemporaryFile()
+def sort_vcf(input_file, tempdir=None):
+    outputfile = tempfile.NamedTemporaryFile(dir=tempdir)
+    sortingfile = tempfile.NamedTemporaryFile(dir=tempdir)
     next_line = input_file.next()
     while next_line and next_line.startswith('#'):
         outputfile.write(next_line)
@@ -127,6 +127,7 @@ def sort_vcf(input_file):
     for line in cut_proc.stdout:
         outputfile.write(line)
     outputfile.seek(0)
+    sortingfile.close()
     return outputfile
 
 

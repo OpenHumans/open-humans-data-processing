@@ -7,6 +7,7 @@ This software is shared under the "MIT License" license (aka "Expat License"),
 see LICENSE.TXT for full license text.
 """
 import bz2
+import gzip
 import json
 import os
 import shutil
@@ -18,6 +19,7 @@ import requests
 from boto.s3.connection import S3Connection
 
 from data_retrieval.files import get_remote_file, mv_tempfile_to_output
+from data_retrieval.sort_vcf import sort_vcf
 
 
 def s3_connection():
@@ -50,6 +52,27 @@ def verify_vcf(input_filepath, sentry=None, username=None):
     # Check that it can advance one record without error.
     input_vcf.next()
     return input_vcf.metadata
+
+
+def standardize_vcf(input_filepath, base_filename, tempdir):
+    """
+    Standardize VCF data to have natural chromosome order and gzip compression.
+    """
+    if input_filepath.endswith('.gz'):
+        inputfile = gzip.open(input_filepath)
+    elif input_filepath.endswith('.bz2'):
+        inputfile = bz2.BZ2File(input_filepath)
+    else:
+        inputfile = open(input_filepath)
+    inputfile.seek(0)
+    sorted_file = sort_vcf(inputfile, tempdir=tempdir)
+    inputfile.close()
+    processed_filename = base_filename[0:-4] + '.sorted.vcf.gz'
+    with gzip.open(os.path.join(tempdir, processed_filename), 'w') as vcf_file:
+        sorted_file.seek(0)
+        shutil.copyfileobj(sorted_file, vcf_file)
+    sorted_file.close()
+    return processed_filename
 
 
 def create_datafiles(username, vcf_data=None, task_id=None, update_url=None,
@@ -90,24 +113,27 @@ def create_datafiles(username, vcf_data=None, task_id=None, update_url=None,
                 sentry.captureMessage(error_msg)
             continue
 
-        metadata = {
-            'description': 'User-contributed VCF data',
-            'tags': ['vcf']
-        }
-        if vcf_data_item[1]['additional_notes']:
-            metadata['user_notes'] = vcf_data_item[1]['additional_notes']
-        temp_files.append({
-            'temp_filename': filename,
-            'tempdir': tempdir,
-            'metadata': metadata,
-        })
-
-        # Create metadata file.
         base_filename = filename
         if filename.endswith('.gz'):
             base_filename = filename[0:-3]
         elif filename.endswith('.bz2'):
             base_filename = filename[0:-4]
+        vcf_processed = standardize_vcf(input_file, base_filename, tempdir)
+
+        metadata = {
+            'description': 'User-contributed VCF data, processed to '
+            'standardize chromosome ordering.',
+            'tags': ['vcf']
+        }
+        if vcf_data_item[1]['additional_notes']:
+            metadata['user_notes'] = vcf_data_item[1]['additional_notes']
+        temp_files.append({
+            'temp_filename': vcf_processed,
+            'tempdir': tempdir,
+            'metadata': metadata,
+        })
+
+        # Create metadata file.
         metadata_filename = base_filename + '.metadata.json'
         metadata_filepath = os.path.join(tempdir, metadata_filename)
         with open(metadata_filepath, 'w') as f:
