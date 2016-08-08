@@ -115,14 +115,14 @@ class BaseSource(object):
 
     def move_files(self):
         for file_info in self.temp_files:
-            filename = file_info['tmp_filename']
+            filename = file_info['temp_filename']
 
             if self.local:
                 self.move_file(filename)
             else:
                 self.move_file_s3(filename, file_info['metadata'])
 
-        os.rmdir(self.temp_directory)
+        shutil.rmtree(self.temp_directory)
 
         if not self.local:
             self.update_open_humans()

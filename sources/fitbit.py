@@ -328,7 +328,7 @@ class FitbitSource(BaseSource):
         filepath = os.path.join(self.temp_directory, filename)
 
         self.temp_files.append({
-            'tmp_filename': filename,
+            'temp_filename': filename,
             'metadata': {
                 'description': ('Fitbit activity, health, and fitness data.'),
                 'tags': ['weight', 'Fitbit', 'steps', 'activity'],
