@@ -1,4 +1,5 @@
-# import json
+import json
+import logging
 import os
 import shutil
 import tempfile
@@ -6,6 +7,8 @@ import tempfile
 import requests
 
 from data_retrieval.files import copy_file_to_s3
+
+logger = logging.getLogger(__name__)
 
 OPEN_HUMANS_TOKEN_REFRESH_URL = os.getenv(
     'OPEN_HUMANS_TOKEN_URL',
@@ -54,7 +57,14 @@ class BaseSource(object):
         self.data_files = []
         self.temp_directory = tempfile.mkdtemp()
 
-    def should_update(self):
+    def sentry_log(self, message):
+        logger.warn(message)
+
+        if self.sentry:
+            self.sentry.captureMessage(message)
+
+    @staticmethod
+    def should_update():
         """
         Sources should override this method and return True if the member's
         source data needs updating.
@@ -125,13 +135,13 @@ class BaseSource(object):
             'oh_source': self.oh_source,
         }
 
-        # status_msg = ('Updating main site ({}) with completed files'
-        #               ' with task_data:\n{}'.format(
-        #                   self.update_url, json.dumps(task_data)))
-
-        # TODO: change to logger
-        # print status_msg
+        logger.info('Updating main site (%s) with completed files with '
+                    'task_data: %s', self.update_url, json.dumps(task_data))
 
         requests.post(self.update_url,
                       params={'key': PRE_SHARED_KEY},
                       json={'task_data': task_data})
+
+    def cli(self):
+        self.create_files()
+        self.move_files()
