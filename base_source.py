@@ -1,8 +1,11 @@
 import json
 import logging
 import os
+import re
 import shutil
 import tempfile
+
+from urlparse import urlsplit
 
 import requests
 
@@ -38,7 +41,8 @@ class BaseSource(object):
 
     def __init__(self, input_file=None, local=False, oh_member_id=None,
                  oh_update_url=None, oh_user_id=None, output_directory=None,
-                 sentry=None, s3_key_dir=None, s3_bucket_name=None, **kwargs):
+                 sentry=None, s3_key_dir=None, s3_bucket_name=None,
+                 return_status=None, **kwargs):
         if not output_directory and not (s3_key_dir and s3_bucket_name):
             raise Exception(
                 'output_directory or S3 parameters must be provided')
@@ -52,6 +56,8 @@ class BaseSource(object):
         self.sentry = sentry
         self.s3_key_dir = s3_key_dir
         self.s3_bucket_name = s3_bucket_name
+        # XXX: change how this works?
+        self.return_status = return_status
 
         self.temp_files = []
         self.data_files = []
@@ -62,6 +68,49 @@ class BaseSource(object):
 
         if self.sentry:
             self.sentry.captureMessage(message)
+
+    def get_remote_file(self, url):
+        """
+        Get and save a remote file to temporary directory. Return filename
+        used.
+        """
+        logger.info('get_remote_file: retrieving "%s"', url)
+        logger.info('get_remote_file: using temporary directory "%s"', url)
+
+        # start a GET request but don't retrieve the data; we'll start
+        # retrieval below
+        request = requests.get(url, stream=True)
+
+        if request.status_code != 200:
+            raise Exception('File URL not working! Data processing aborted: {}'
+                            .format(url))
+
+        specified_filename = ''
+
+        # try to retrieve the filename via the 'Content-Disposition' filename
+        # header
+        if 'Content-Disposition' in request.headers:
+            filename = re.match(r'attachment; filename="(.*)"$',
+                                request.headers['Content-Disposition'])
+
+            if filename:
+                specified_filename = filename.groups()[0]
+
+        # if that header isn't sent then use the last portion of the URL as the
+        # filename ('https://test.com/hello/world.zip' becomes 'world.zip')
+        if not specified_filename:
+            specified_filename = urlsplit(request.url)[2].split('/')[-1]
+
+        logger.info('get_remote_file: filename "%s"', specified_filename)
+
+        with open(os.path.join(self.temp_directory,
+                               specified_filename), 'wb') as temp_file:
+            # write each streamed chunk to the temporary file
+            for chunk in request.iter_content(chunk_size=512 * 1024):
+                if chunk:
+                    temp_file.write(chunk)
+
+        return specified_filename
 
     @staticmethod
     def should_update():

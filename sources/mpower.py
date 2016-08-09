@@ -16,124 +16,75 @@ Will assemble processed data sets in files/
 import os
 import shutil
 import sys
-import tempfile
 import zipfile
 
-import requests
-
-from data_retrieval.files import get_remote_file, mv_tempfile_to_output
+from base_source import BaseSource
 
 
-def verify_mpower(input_filepath, sentry=None, username=None):
-    """
-    Create clean file in mPower format from downloaded version
-    """
-    if input_filepath.endswith('.zip'):
-        zip_file = zipfile.ZipFile(input_filepath)
-
-        file_list = [f for f in zip_file.namelist()
-                     if not f.startswith('__MACOSX/')]
-
-        for filename in file_list:
-            if not filename.startswith('parkinson-'):
-                if sentry:
-                    sentry_msg = ('mPower file did not conform to expected '
-                                  'format.')
-
-                    if username:
-                        sentry_msg += ' Username: {}'.format(username)
-
-                    sentry.captureMessage(sentry_msg)
-
-                raise ValueError(
-                    'Found a filename that did not start with "parkinson-": '
-                    '"{}"'.format(filename))
-    else:
-        raise ValueError('Input file is expected to be a ZIP archive')
-
-
-def create_datafiles(username, input_file=None, file_url=None, task_id=None,
-                     update_url=None, sentry=None, **kwargs):
+class MPowerSource(BaseSource):
     """
     Create Open Humans Dataset from uploaded mPower data.
-
-    Optional arguments:
-        input_file: path to a local copy of the uploaded file
-        file_url: path to an online copy of the input file
-        filedir: Local filepath, folder in which to place the resulting file.
-        s3_bucket_name: S3 bucket to write resulting file.
-        s3_key_dir: S3 key "directory" to write resulting file. The full S3 key
-                    name will add a filename to the end of s3_key_dir.
-
-    For input: either 'input_file' or 'file_url' must be specified.
-    (The first is a path to a local file, the second is a URL to a remote one.)
-
-    For output: iither 'filedir' (and no S3 arguments), or both
-    's3_bucket_name' and 's3_key_dir' (and no 'filedir') must be specified.
     """
-    tempdir = tempfile.mkdtemp()
-    temp_files = []
-    data_files = []
 
-    if file_url and not input_file:
-        filename = get_remote_file(file_url, tempdir)
-        input_file = os.path.join(tempdir, filename)
-    elif input_file and not file_url:
-        pass
-    else:
-        raise Exception('Run with either input_file, or file_url')
+    def __init__(self, username, **kwargs):
+        self.username = username
 
-    verify_mpower(input_file, sentry, username)
+        super(MPowerSource, self).__init__(**kwargs)
 
-    shutil.copyfile(input_file, os.path.join(tempdir, 'mPower-Parkinsons.zip'))
+    def verify_mpower(self, input_filepath):
+        """
+        Create clean file in mPower format from downloaded version
+        """
+        if input_filepath.endswith('.zip'):
+            zip_file = zipfile.ZipFile(input_filepath)
 
-    temp_files.append({
-        'temp_filename': 'mPower-Parkinsons.zip',
-        'tempdir': tempdir,
-        'metadata': {
-            'description': 'mPower data, original format',
-            'tags': ['mPower', 'CSV', 'JSON'],
-        },
-    })
+            file_list = [f for f in zip_file.namelist()
+                         if not f.startswith('__MACOSX/')]
 
-    print 'Finished creating all datasets locally.'
+            for filename in file_list:
+                if not filename.startswith('parkinson-'):
+                    self.sentry_log('mPower file did not conform to expected '
+                                    'format. Username: {}'.format(
+                                        self.username))
 
-    for file_info in temp_files:
-        print 'File info: {}'.format(str(file_info))
+                    raise ValueError(
+                        'Found a filename that did not start with '
+                        '"parkinson-": "{}"'.format(filename))
+        else:
+            raise ValueError('Input file is expected to be a ZIP archive')
 
-        filename = file_info['temp_filename']
-        file_tempdir = file_info['tempdir']
+    def create_datafiles(self):
+        if self.file_url and not self.input_file:
+            filename = self.get_remote_file(self.file_url)
+            input_file = os.path.join(self.temp_directory, filename)
+        elif self.input_file and not self.file_url:
+            pass
+        else:
+            raise Exception('Run with either input_file, or file_url')
 
-        output_path = mv_tempfile_to_output(
-            os.path.join(file_tempdir, filename), filename, **kwargs)
+        self.verify_mpower(input_file)
 
-        if 's3_key_dir' in kwargs and 's3_bucket_name' in kwargs:
-            data_files.append({
-                's3_key': output_path,
-                'metadata': file_info['metadata'],
-            })
+        shutil.copyfile(input_file, os.path.join(self.temp_directory,
+                                                 'mPower-Parkinsons.zip'))
 
-    if file_url:
-        os.remove(input_file)
+        self.temp_files.append({
+            'temp_filename': 'mPower-Parkinsons.zip',
+            'metadata': {
+                'description': 'mPower data, original format',
+                'tags': ['mPower', 'CSV', 'JSON'],
+            },
+        })
 
-    os.rmdir(tempdir)
-
-    print 'Finished moving all datasets to permanent storage.'
-
-    if not (task_id and update_url):
-        return
-
-    task_data = {'task_id': task_id, 'data_files': data_files}
-
-    requests.post(update_url, json={'task_data': task_data})
-
+    def cli(self):
+        self.create_datafiles()
 
 if __name__ == '__main__':
     if len(sys.argv) != 4:
-        print ('Please specify a remote file URL, target local directory, '
-               'and username.')
+        print ('Please specify a remote file URL, username, and target local '
+               'directory.')
 
         sys.exit(1)
 
-    create_datafiles(input_file=sys.argv[1], filedir=sys.argv[2],
-                     username=sys.argv[3])
+    mpower = MPowerSource(file_url=sys.argv[1],
+                          username=sys.argv[2],
+                          output_directory=sys.argv[3])

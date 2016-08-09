@@ -12,7 +12,6 @@ import os
 import vcf
 
 from base_source import BaseSource
-from data_retrieval.files import get_remote_file
 
 
 class VCFDataSource(BaseSource):
@@ -51,9 +50,7 @@ class VCFDataSource(BaseSource):
 
     def create_datafiles(self):
         for vcf_data_item in self.vcf_data:
-            filename = get_remote_file(
-                vcf_data_item['vcf_file']['url'], self.temp_directory)
-
+            filename = self.get_remote_file(vcf_data_item['vcf_file']['url'])
             input_file = os.path.join(self.temp_directory, filename)
 
             try:
