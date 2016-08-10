@@ -9,15 +9,6 @@ import os
 
 from unittest import TestCase
 
-from sources.american_gut import create_datafiles as datafiles_american_gut
-from sources.fitbit import FitbitSource
-from sources.go_viral import GoViralSource
-from sources.pgp import create_datafiles as datafiles_pgp
-from sources.runkeeper import create_datafiles as datafiles_runkeeper
-from sources.twenty_three_and_me import (
-    create_datafiles as datafiles_twenty_three_and_me)
-from sources.wildlife import create_datafiles as datafiles_wildlife
-
 from .utilities import apply_env, get_env
 
 apply_env(get_env())
@@ -73,39 +64,6 @@ class RetrievalTestCase(TestCase):
         self.assertIsNotNone(dataset.filepath)
         self.assertIsNotNone(dataset.metadata)
         self.assertIsNotNone(dataset.source)
-
-
-class FileTests(RetrievalTestCase):
-    """
-    Test the filedir case for each data retrieval module.
-    """
-    def __init__(self, *args, **kwargs):
-        self.test_kwargs = self.get_test_kwargs()
-        super(FileTests, self).__init__(*args, **kwargs)
-
-    @staticmethod
-    def get_test_kwargs():
-        return {'filedir': 'test_data'}
-
-    # def test_american_gut(self):
-    #     self.check_dataset(get_american_gut_dataset(**self.test_kwargs))
-
-    # def test_go_viral(self):
-    #     self.check_dataset(get_go_viral_dataset(**self.test_kwargs))
-
-    # def test_pgp(self):
-    #     for dataset in get_pgp_datasets(**self.test_kwargs):
-    #         self.check_dataset(dataset)
-
-    # def test_runkeeper(self):
-    #     for dataset in get_runkeeper_datasets(**self.test_kwargs):
-    #         self.check_dataset(dataset)
-
-    # def test_twenty_three_and_me(self):
-    #     self.check_dataset(get_twenty_three_and_me_dataset(**self.test_kwargs))
-
-    def test_wildlife(self):
-        self.check_dataset(get_wildlife_dataset(**self.test_kwargs))
 
 
 class S3Tests(FileTests):
