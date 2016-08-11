@@ -69,6 +69,9 @@ class BaseSource(object):
         if self.sentry:
             self.sentry.captureMessage(message)
 
+    def temp_join(self, path):
+        return os.path.join(self.temp_directory, path)
+
     def get_remote_file(self, url):
         """
         Get and save a remote file to temporary directory. Return filename

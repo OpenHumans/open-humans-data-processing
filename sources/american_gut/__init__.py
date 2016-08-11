@@ -25,6 +25,8 @@ import requests
 
 from bs4 import BeautifulSoup
 
+from base_source import BaseSource
+
 SURVEYID_TO_SAMPACC_FILE = os.path.join(
     os.path.dirname(__file__),
     'survey_id_to_sample_accession.json')
@@ -165,70 +167,6 @@ def dict_list_as_tsv(list_of_dicts):
     return output
 
 
-def handle_ena_info(self, ena_info, filename_base, source):
-    tsv_filename = filename_base + '-ena-info.tsv'
-    tsv_filepath = os.path.join(self.temp_directory, tsv_filename)
-
-    with open(tsv_filepath, 'w') as f:
-        for line in dict_list_as_tsv(ena_info):
-            f.write(line)
-
-    json_filename = filename_base + '-ena-info.json'
-    json_filepath = os.path.join(self.temp_directory, json_filename)
-
-    with open(json_filepath, 'w') as f:
-        json.dump(ena_info, f, indent=2, sort_keys=True)
-
-    return [{
-        'temp_filename': tsv_filename,
-        'metadata': {
-            'description': ('American Gut sample accession data from the '
-                            'European Nucleotide Archive, TSV format.'),
-            'tags': ['metadata', 'American Gut', 'tsv'],
-            'sourceURL': source,
-            }
-    }, {
-        'temp_filename': json_filename,
-        'metadata': {
-            'description': ('American Gut sample accession data from the '
-                            'European Nucleotide Archive, JSON format.'),
-            'tags': ['metadata', 'American Gut', 'json'],
-            'sourceURL': source,
-        }
-    }]
-
-
-def handle_ena_metadata(self, ena_metadata, filename_base, source):
-    tsv_filename = filename_base + '-metadata.tsv'
-
-    with open(os.path.join(self.temp_directory, tsv_filename), 'w') as f:
-        for line in dict_list_as_tsv([ena_metadata]):
-            f.write(line)
-
-    json_filename = filename_base + '-metadata.json'
-
-    with open(os.path.join(self.temp_directory, json_filename), 'w') as f:
-        json.dump(ena_metadata, f, indent=2, sort_keys=True)
-
-    return [{
-        'temp_filename': tsv_filename,
-        'metadata': {
-            'description': ('American Gut sample survey data and metadata, '
-                            'TSV format.'),
-            'tags': ['metadata', 'survey', 'American Gut', 'tsv'],
-            'sourceURL': source,
-        }
-    }, {
-        'temp_filename': json_filename,
-        'metadata': {
-            'description': ('American Gut sample survey data and metadata, '
-                            'JSON format.'),
-            'tags': ['metadata', 'survey', 'American Gut', 'json'],
-            'sourceURL': source,
-        }
-    }]
-
-
 class AmericanGutSource(BaseSource):
     """
     Create a dataset from a set of American Gut survey IDs.
@@ -236,6 +174,72 @@ class AmericanGutSource(BaseSource):
     Required arguments:
         survey_ids: List of survey IDs
     """
+
+    def handle_ena_info(self, ena_info, filename_base, source):
+        tsv_filename = filename_base + '-ena-info.tsv'
+        tsv_filepath = self.temp_join(tsv_filename)
+
+        with open(tsv_filepath, 'w') as f:
+            for line in dict_list_as_tsv(ena_info):
+                f.write(line)
+
+        json_filename = filename_base + '-ena-info.json'
+        json_filepath = self.temp_join(json_filename)
+
+        with open(json_filepath, 'w') as f:
+            json.dump(ena_info, f, indent=2, sort_keys=True)
+
+        self.temp_files.append({
+            'temp_filename': tsv_filename,
+            'metadata': {
+                'description': ('American Gut sample accession data from the '
+                                'European Nucleotide Archive, TSV format.'),
+                'tags': ['metadata', 'American Gut', 'tsv'],
+                'sourceURL': source,
+                }
+        })
+
+        self.temp_files.append({
+            'temp_filename': json_filename,
+            'metadata': {
+                'description': ('American Gut sample accession data from the '
+                                'European Nucleotide Archive, JSON format.'),
+                'tags': ['metadata', 'American Gut', 'json'],
+                'sourceURL': source,
+            }
+        })
+
+    def handle_ena_metadata(self, ena_metadata, filename_base, source):
+        tsv_filename = filename_base + '-metadata.tsv'
+
+        with open(self.temp_join(tsv_filename), 'w') as f:
+            for line in dict_list_as_tsv([ena_metadata]):
+                f.write(line)
+
+        json_filename = filename_base + '-metadata.json'
+
+        with open(self.temp_join(json_filename), 'w') as f:
+            json.dump(ena_metadata, f, indent=2, sort_keys=True)
+
+        self.temp_files.append({
+            'temp_filename': tsv_filename,
+            'metadata': {
+                'description': ('American Gut sample survey data and '
+                                'metadata, TSV format.'),
+                'tags': ['metadata', 'survey', 'American Gut', 'tsv'],
+                'sourceURL': source,
+            }
+        })
+
+        self.temp_files.append({
+            'temp_filename': json_filename,
+            'metadata': {
+                'description': ('American Gut sample survey data and '
+                                'metadata, JSON format.'),
+                'tags': ['metadata', 'survey', 'American Gut', 'json'],
+                'sourceURL': source,
+            }
+        })
 
     def create_datafiles(self):
         # For mapping survey IDs to sample accessions.
@@ -261,18 +265,16 @@ class AmericanGutSource(BaseSource):
                 # accessions.
                 ena_info, url = get_ena_info_set(accession=sampleacc)
 
-                self.temp_files += handle_ena_info(
-                    ena_info=ena_info,
-                    filename_base=filename_base,
-                    source=url)
+                self.handle_ena_info(ena_info=ena_info,
+                                     filename_base=filename_base,
+                                     source=url)
 
                 # Get and store metadata. Contains survey data.
                 ena_metadata, url = fetch_metadata_xml(accession=sampleacc)
 
-                self.temp_files += handle_ena_metadata(
-                    ena_metadata=ena_metadata,
-                    filename_base=filename_base,
-                    source=url)
+                self.handle_ena_metadata(ena_metadata=ena_metadata,
+                                         filename_base=filename_base,
+                                         source=url)
 
                 # Process to get individual read files. A sample can have more
                 # than one read file if it has more than one run, e.g. if the
@@ -280,34 +282,30 @@ class AmericanGutSource(BaseSource):
                 for ena_info_item in ena_info:
                     fastq_url = 'http://' + ena_info_item['fastq_ftp']
 
-                    print 'Retrieving file from: {}'.format(fastq_url)
-
-                    fastq_filename = filename_base + '-run-{}.fastq'.format(
+                    fastq_filename = '{}-run-{}.fastq'.format(
+                        filename_base,
                         ena_info_item['run_accession'])
 
-                    orig_filename = self.get_remote_file(fastq_url,
-                                                         self.temp_directory)
+                    original_filename = self.get_remote_file(fastq_url)
 
-                    if orig_filename.endswith('.gz'):
-                        new_fn = fastq_filename + '.gz'
-                    elif orig_filename.endswith('.bz2'):
-                        new_fn = fastq_filename + '.bz2'
-                    elif orig_filename.endswith('.zip'):
-                        new_fn = fastq_filename + '.zip'
+                    if original_filename.endswith('.gz'):
+                        new_filename = fastq_filename + '.gz'
+                    elif original_filename.endswith('.bz2'):
+                        new_filename = fastq_filename + '.bz2'
+                    elif original_filename.endswith('.zip'):
+                        new_filename = fastq_filename + '.zip'
 
-                    new_fp = os.path.join(self.temp_directory, new_fn)
-
-                    shutil.move(os.path.join(self.temp_directory,
-                                             orig_filename), new_fp)
+                    shutil.move(self.temp_join(original_filename),
+                                self.temp_join(new_filename))
 
                     self.temp_files.append({
-                        'temp_filename': new_fn,
+                        'temp_filename': new_filename,
                         'metadata': {
                             'description': ('American Gut 16S FASTQ raw '
                                             'sequencing data.'),
                             'tags': ['fastq', 'American Gut', '16S'],
                             'sourceURL': fastq_url,
-                            'originalFilename': orig_filename,
+                            'originalFilename': original_filename,
                         }
                     })
 
