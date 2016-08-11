@@ -15,20 +15,15 @@ Will assemble processed data sets in files/
 
 import bz2
 import gzip
-import json
 import os
 import re
 import shutil
 import sys
-import tempfile
 import zipfile
 
 from cStringIO import StringIO
 from datetime import date, datetime
 
-import requests
-
-from data_retrieval.files import get_remote_file, mv_tempfile_to_output
 from data_retrieval.sort_vcf import sort_vcf
 
 REF_ANCESTRYDNA_FILE = os.path.join(
@@ -298,31 +293,17 @@ def clean_raw_ancestrydna(input_filepath, sentry=None, username=None):
     return output, genome_sex
 
 
-def create_datafiles(username, input_file=None, file_url=None, task_id=None,
-                     update_url=None, sentry=None, **kwargs):
-    """Create Open Humans Dataset from uploaded AncestryDNA genotyping data
+def create_datafiles(self, input_file=None, file_url=None):
+    """
+    Create Open Humans Dataset from uploaded AncestryDNA genotyping data
 
     Optional arguments:
         input_file: path to a local copy of the uploaded file
         file_url: path to an online copy of the input file
-        filedir: Local filepath, folder in which to place the resulting file.
-        s3_bucket_name: S3 bucket to write resulting file.
-        s3_key_dir: S3 key "directory" to write resulting file. The full S3 key
-                    name will add a filename to the end of s3_key_dir.
-
-    For input: either 'input_file' or 'file_url' must be specified.
-    (The first is a path to a local file, the second is a URL to a remote one.)
-
-    For output: iither 'filedir' (and no S3 arguments), or both
-    's3_bucket_name' and 's3_key_dir' (and no 'filedir') must be specified.
     """
-    tempdir = tempfile.mkdtemp()
-    temp_files = []
-    data_files = []
-
     if file_url and not input_file:
-        filename = get_remote_file(file_url, tempdir)
-        input_file = os.path.join(tempdir, filename)
+        filename = self.get_remote_file(file_url)
+        input_file = self.temp_join(filename)
     elif input_file and not file_url:
         pass
     else:
@@ -330,20 +311,21 @@ def create_datafiles(username, input_file=None, file_url=None, task_id=None,
 
     filename_base = 'AncestryDNA-genotyping'
 
-    raw_ancestrydna, genome_sex = clean_raw_ancestrydna(
-        input_file, sentry, username)
+    raw_ancestrydna, genome_sex = clean_raw_ancestrydna(input_file)
     raw_ancestrydna.seek(0)
     vcf_ancestrydna_unsorted = vcf_from_raw_ancestrydna(
         raw_ancestrydna, genome_sex)
 
     # Save raw AncestryDNA genotyping to temp file.
     raw_filename = filename_base + '.txt'
-    with open(os.path.join(tempdir, raw_filename), 'w') as raw_file:
+
+    with open(self.temp_join(raw_filename), 'w') as raw_file:
         raw_ancestrydna.seek(0)
+
         shutil.copyfileobj(raw_ancestrydna, raw_file)
-        temp_files.append({
+
+        self.temp_files.append({
             'temp_filename': raw_filename,
-            'tempdir': tempdir,
             'metadata': {
                 'description':
                     'AncestryDNA full genotyping data, original format',
@@ -355,46 +337,19 @@ def create_datafiles(username, input_file=None, file_url=None, task_id=None,
     vcf_ancestrydna_unsorted.seek(0)
     vcf_ancestrydna_sorted = sort_vcf(vcf_ancestrydna_unsorted)
     vcf_filename = filename_base + '.vcf.bz2'
-    with bz2.BZ2File(os.path.join(tempdir, vcf_filename), 'w') as vcf_file:
+
+    with bz2.BZ2File(self.temp_join(vcf_filename), 'w') as vcf_file:
         vcf_ancestrydna_sorted.seek(0)
+
         shutil.copyfileobj(vcf_ancestrydna_sorted, vcf_file)
-        temp_files.append({
+
+        self.temp_files.append({
             'temp_filename': vcf_filename,
-            'tempdir': tempdir,
             'metadata': {
                 'description': 'AncestryDNA full genotyping data, VCF format',
                 'tags': ['AncestryDNA', 'genotyping', 'vcf'],
             },
         })
-
-    print 'Finished creating all datasets locally.'
-
-    for file_info in temp_files:
-        print 'File info: {}'.format(str(file_info))
-        filename = file_info['temp_filename']
-        file_tempdir = file_info['tempdir']
-        output_path = mv_tempfile_to_output(
-            os.path.join(file_tempdir, filename), filename, **kwargs)
-        if 's3_key_dir' in kwargs and 's3_bucket_name' in kwargs:
-            data_files.append({
-                's3_key': output_path,
-                'metadata': file_info['metadata'],
-            })
-    if file_url:
-        os.remove(input_file)
-    os.rmdir(tempdir)
-
-    print 'Finished moving all datasets to permanent storage.'
-
-    if not (task_id and update_url):
-        return
-
-    task_data = {'task_id': task_id, 'data_files': data_files}
-    status_msg = ('Updating main site ({}) with completed files for task_id={}'
-                  ' with task_data:\n{}'.format(
-                      update_url, task_id, json.dumps(task_data)))
-    print status_msg
-    requests.post(update_url, json={'task_data': task_data})
 
 
 if __name__ == '__main__':
