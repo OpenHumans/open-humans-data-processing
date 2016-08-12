@@ -28,7 +28,7 @@ class WildlifeSource(BaseSource):
 
         super(WildlifeSource, self).__init__(**kwargs)
 
-    def create_datafiles(self):
+    def create_files(self):
         for filename in self.files:
             url = self.files[filename]
             filename = self.get_remote_file(url)

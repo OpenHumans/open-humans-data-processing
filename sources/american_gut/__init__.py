@@ -5,21 +5,12 @@ Copyright (C) 2014 PersonalGenomes.org
 
 This software is shared under the "MIT License" license (aka "Expat License"),
 see LICENSE.TXT for full license text.
-
-May be used on the command line from this project's base directory, e.g.
-
-   python -m sources.american_gut 000007080 files
-
-...will assemble a data set for the barcode 000007080 at:
-
-   files/AmericanGut-000007080-dataset.tar.gz
 """
 
 import json
 import os
 import re
 import shutil
-import sys
 
 import requests
 
@@ -241,7 +232,7 @@ class AmericanGutSource(BaseSource):
             }
         })
 
-    def create_datafiles(self):
+    def create_files(self):
         # For mapping survey IDs to sample accessions.
         with open(SURVEYID_TO_SAMPACC_FILE) as filedata:
             surveyid_to_sampacc = json.loads(''.join(filedata.readlines()))
@@ -308,11 +299,3 @@ class AmericanGutSource(BaseSource):
                             'originalFilename': original_filename,
                         }
                     })
-
-
-if __name__ == '__main__':
-    if len(sys.argv) != 3:
-        print 'Please specify a survey ID and directory.'
-        sys.exit(1)
-
-    create_datafiles(survey_ids=[sys.argv[1]], filedir=sys.argv[2])

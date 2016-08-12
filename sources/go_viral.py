@@ -9,7 +9,6 @@ see LICENSE.TXT for full license text.
 
 import json
 import os
-import sys
 
 import requests
 
@@ -94,12 +93,4 @@ class GoViralSource(BaseSource):
 
 
 if __name__ == '__main__':
-    if len(sys.argv) != 4:
-        print 'Please specify an access token, GoViral ID, and directory.'
-
-        sys.exit(1)
-
-    go_viral = GoViralSource(access_token=sys.argv[1], go_viral_id=sys.argv[2],
-                             output_directory=sys.argv[3], local=True)
-
-    go_viral.cli()
+    GoViralSource.cli()

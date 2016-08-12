@@ -1,12 +1,16 @@
+import bz2
+import gzip
 import json
 import logging
 import os
 import re
 import shutil
 import tempfile
+import zipfile
 
 from urlparse import urlsplit
 
+import click
 import requests
 
 from data_retrieval.files import copy_file_to_s3
@@ -39,19 +43,22 @@ class BaseSource(object):
     no 'output_directory') must be specified.
     """
 
-    def __init__(self, input_file=None, local=False, oh_member_id=None,
-                 oh_update_url=None, oh_user_id=None, output_directory=None,
-                 sentry=None, s3_key_dir=None, s3_bucket_name=None,
-                 return_status=None, **kwargs):
+    def __init__(self, input_file=None, file_url=None, local=False,
+                 oh_member_id=None, oh_update_url=None, oh_user_id=None,
+                 oh_username=None, output_directory=None, sentry=None,
+                 s3_key_dir=None, s3_bucket_name=None, return_status=None,
+                 **kwargs):
         if not output_directory and not (s3_key_dir and s3_bucket_name):
             raise Exception(
                 'output_directory or S3 parameters must be provided')
 
         self.input_file = input_file
+        self.file_url = file_url
         self.local = local
         self.oh_member_id = oh_member_id
         self.oh_update_url = oh_update_url
         self.oh_user_id = oh_user_id
+        self.oh_username = oh_username
         self.output_directory = output_directory
         self.sentry = sentry
         self.s3_key_dir = s3_key_dir
@@ -63,7 +70,45 @@ class BaseSource(object):
         self.data_files = []
         self.temp_directory = tempfile.mkdtemp()
 
+        self.coerce_file()
+
+    def coerce_file(self):
+        if self.file_url and self.input_file:
+            raise Exception('Run with input_file or file_url, not both')
+        elif self.file_url and not self.input_file:
+            self.input_file = self.temp_join(
+                self.get_remotefile(self.file_url))
+
+    def open_archive(self):
+        error_message = ("Input file is expected to be either '.txt', "
+                         "'.txt.gz', '.txt.bz2', or a single '.txt' file in a "
+                         "'.zip' ZIP archive.")
+
+        if self.input_file.endswith('.zip'):
+            zip_file = zipfile.ZipFile(self.input_file)
+            zip_files = self.filter_archive(zip_file)
+
+            if len(zip_files) != 1:
+                raise ValueError(error_message)
+
+            return zip_file.open(zip_files[0])
+        elif self.input_file.endswith('.txt.gz'):
+            return gzip.open(self.input_file)
+        elif self.input_file.endswith('.txt.bz2'):
+            return bz2.BZ2File(self.input_file)
+        elif self.input_file.endswith('.txt'):
+            return open(self.input_file)
+
+        raise ValueError(error_message)
+
+    @staticmethod
+    def filter_archive(zip_file):
+        return [f for f in zip_file.namelist()
+                if not f.startswith('__MACOSX/')]
+
     def sentry_log(self, message):
+        message += ' Username: "{}"'.format(self.oh_username)
+
         logger.warn(message)
 
         if self.sentry:
@@ -106,8 +151,7 @@ class BaseSource(object):
 
         logger.info('get_remote_file: filename "%s"', specified_filename)
 
-        with open(os.path.join(self.temp_directory,
-                               specified_filename), 'wb') as temp_file:
+        with open(self.temp_join(specified_filename), 'wb') as temp_file:
             # write each streamed chunk to the temporary file
             for chunk in request.iter_content(chunk_size=512 * 1024):
                 if chunk:
@@ -184,7 +228,7 @@ class BaseSource(object):
             'data_files': self.data_files,
             'oh_member_id': self.oh_member_id,
             'oh_user_id': self.oh_user_id,
-            'oh_source': self.oh_source,
+            'oh_source': __name__,
         }
 
         logger.info('Updating main site (%s) with completed files with '
@@ -194,6 +238,42 @@ class BaseSource(object):
                       params={'key': PRE_SHARED_KEY},
                       json={'task_data': task_data})
 
-    def cli(self):
-        self.create_files()
+    def run(self):
+        if not self.should_update():
+            return
+
+        result = self.create_files()
+
+        if result:
+            return result
+
         self.move_files()
+
+    def run_cli(self):
+        self.run()
+
+    @classmethod
+    def make_cli(cls):
+        """
+        Make a cli method that can be further extended by subclasses.
+        """
+
+        @click.command()
+        @click.option('-a', '--access-token')
+        @click.option('-f', '--file-url')
+        @click.option('-i', '--input-file')
+        @click.option('-o', '--output-directory')
+        @click.option('-u', '--oh-username')
+        @click.option('-d', '--oh-user-id')
+        @click.option('-l', '--local', is_flag=True, default=True)
+        def base_cli(**kwargs):
+            logging.basicConfig(level=logging.DEBUG)
+
+            source = cls(**kwargs)
+            source.run_cli()
+
+        return base_cli
+
+    @classmethod
+    def cli(cls):
+        cls.make_cli()()

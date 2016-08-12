@@ -23,7 +23,6 @@ from datetime import date, datetime
 
 import json
 import os
-import sys
 import time
 
 import requests
@@ -84,6 +83,7 @@ class MovesSource(BaseSource):
         # If a rate cap is encountered, return a result reporting this.
         if data_response.status_code == 429:
             query_result['rate_cap_encountered'] = True
+
             return query_result
 
         query_result['response_json'] = data_response.json()
@@ -140,7 +140,7 @@ class MovesSource(BaseSource):
 
         return full_storyline_result
 
-    def create_datafiles(self):
+    def create_files(self):
         filename = 'moves-storyline-data.json'
         filepath = os.path.join(self.temp_directory, filename)
 
@@ -169,9 +169,9 @@ class MovesSource(BaseSource):
         with open(filepath, 'w') as f:
             json.dump(user_data, f, indent=2)
 
-    def cli(self):
+    def run_cli(self):
         while True:
-            result = self.create_datafiles()
+            result = self.create_files()
 
             if result:
                 countdown = result['countdown']
@@ -183,12 +183,8 @@ class MovesSource(BaseSource):
             else:
                 break
 
+        self.move_files()
+
 
 if __name__ == '__main__':
-    if len(sys.argv) != 3:
-        print 'Please specify a token and directory.'
-
-        sys.exit(1)
-
-    moves = MovesSource(access_token=sys.argv[1], output_directory=sys.argv[2])
-    moves.cli()
+    MovesSource.cli()

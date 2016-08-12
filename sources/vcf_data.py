@@ -1,4 +1,4 @@
-r"""
+"""
 Genome/Exome VCF data processing.
 
 Copyright (C) 2016 PersonalGenomes.org
@@ -48,7 +48,7 @@ class VCFDataSource(BaseSource):
 
         return input_vcf.metadata
 
-    def create_datafiles(self):
+    def create_files(self):
         for vcf_data_item in self.vcf_data:
             filename = self.get_remote_file(vcf_data_item['vcf_file']['url'])
             input_file = os.path.join(self.temp_directory, filename)
@@ -57,9 +57,9 @@ class VCFDataSource(BaseSource):
                 header_data = self.verify_vcf(input_file)
             except Exception as e:
                 self.sentry_log(
-                    'vcf_data: error in processing! '
-                    'File URL: {0}, User ID: {1}, Error: "{2}"'.format(
-                        vcf_data_item['vcf_file']['url'], self.oh_user_id, e))
+                    'vcf_data: error in processing! File URL: {0}, '
+                    'Error: "{2}"'.format(
+                        vcf_data_item['vcf_file']['url'], e))
 
                 continue
 
@@ -103,12 +103,10 @@ class VCFDataSource(BaseSource):
             })
 
 
-# if __name__ == '__main__':
-#     if len(sys.argv) != 4:
-#         print ('Please specify a remote file URL, target local directory, '
-#                'and username.')
+if __name__ == '__main__':
+    import click
 
-#         sys.exit(1)
+    cli = VCFDataSource.make_cli()
+    cli = click.option('--vcf-data')(cli)
 
-#     create_datafiles(input_file=sys.argv[1], filedir=sys.argv[2],
-#                      username=sys.argv[3])
+    cli()

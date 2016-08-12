@@ -26,7 +26,6 @@ from __future__ import unicode_literals
 
 import json
 import os
-import sys
 
 from datetime import datetime, timedelta
 
@@ -76,6 +75,13 @@ def yearly_items(items):
 
 
 class RunKeeperSource(BaseSource):
+    """
+    Create Open Humans Dataset from RunKeeper API data
+
+    Required arguments:
+        access_token: RunKeeper access token
+    """
+
     def __init__(self, access_token, **kwargs):
         self.access_token = access_token
 
@@ -125,13 +131,8 @@ class RunKeeperSource(BaseSource):
 
         return items
 
-    def create_datafiles(self):
+    def create_files(self):
         """
-        Create Open Humans Dataset from RunKeeper API data
-
-        Required arguments:
-            access_token: RunKeeper access token
-
         Data is split per-year, in JSON format.
         Each JSON is an object (dict) in the following format (pseudocode):
 
@@ -219,9 +220,5 @@ class RunKeeperSource(BaseSource):
             })
 
 
-# if __name__ == '__main__':
-#     if len(sys.argv) != 3:
-#         print 'Please specify a token and directory.'
-#         sys.exit(1)
-
-#     create_datafiles(*sys.argv[1:-1], filedir=sys.argv[-1])
+if __name__ == '__main__':
+    RunKeeperSource.cli()

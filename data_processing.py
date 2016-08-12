@@ -5,6 +5,7 @@ Flask app to run data retrieval tasks for Open Humans
 """
 
 import imp
+import inspect
 import json
 import logging
 import os
@@ -25,13 +26,14 @@ from werkzeug.contrib.fixers import ProxyFix
 
 from celery_worker import make_worker
 
+from base_source import BaseSource
 from models import db
 
 app = Flask(__name__)
 
 DEBUG = os.getenv('DEBUG', False)
 
-# A mapping of name/source argument pairs to send to the create_datafiles
+# A mapping of name/source argument pairs to send to the create_files
 # method
 EXTRA_DATA = {
     'american_gut': {
@@ -42,7 +44,7 @@ EXTRA_DATA = {
     },
 }
 
-DATAFILES = {}
+SOURCES = {}
 
 logging.basicConfig(level=logging.DEBUG if DEBUG else logging.INFO)
 logging.info('Starting data-processing')
@@ -91,8 +93,9 @@ def trunc_strings(obj, chars=300):
         for key in obj.keys():
             obj[key] = trunc_strings(obj[key], chars=chars)
     elif isinstance(obj, list):
-        for i in range(len(obj)):
+        for i in enumerate(obj):
             obj[i] = trunc_strings(obj[i], chars=chars)
+
     return obj
 
 
@@ -220,9 +223,9 @@ def load_sources():
 
 
 @celery_worker.task
-def datafiles_task(name, **task_params):
+def source_task(name, **task_params):
     """
-    Task to run appropriate create_datafiles method, with EXTRA_DATA mapping.
+    Task to run appropriate create_files method, with EXTRA_DATA mapping.
 
     The 'name' parameter is used to look up the corresponding module, loaded
     by load_sources.
@@ -231,7 +234,7 @@ def datafiles_task(name, **task_params):
     task with the same paramaters. To do this, tasks that need requeueing
     return a dict containing a key 'countdown' (a delay added when requeued).
 
-    create_datafiles methods that return None are assumed to have completed
+    create_files methods that return None are assumed to have completed
     successfully.
 
     Otherwise, the method may return a dict containing the key 'countdown',
@@ -249,33 +252,42 @@ def datafiles_task(name, **task_params):
 
             task_params[key] = task_params['data'][value]
 
-    return_status = DATAFILES[name](sentry=sentry, **task_params)
+    source = SOURCES[name](sentry=sentry, **task_params)
+    return_status = source.run()
+
     if return_status and 'countdown' in return_status:
         task_params['return_status'] = return_status
-        datafiles_task.apply_async(args=[name],
-                                   kwargs=task_params,
-                                   countdown=return_status['countdown'])
+
+        source_task.apply_async(args=[name],
+                                kwargs=task_params,
+                                countdown=return_status['countdown'])
+
         return 'resubmitted'
 
 
 def generic_handler(name):
     logging.info('POST JSON: %s', debug_json(request.json))
 
-    datafiles_task.delay(name, **request.json['task_params'])
+    source_task.delay(name, **request.json['task_params'])
 
     return '{} dataset started'.format(name)
 
 
 def add_rules():
     for name, source in load_sources():
-        logging.info('Adding "%s"', name)
+        for cls_name, cls in inspect.getmembers(source):
+            if (inspect.isclass(cls) and
+                    issubclass(cls, BaseSource) and
+                    cls is not BaseSource and
+                    name not in SOURCES):
+                logging.info('Adding "%s", "%s"', name, cls_name)
 
-        DATAFILES[name] = source.create_datafiles
+                SOURCES[name] = cls
 
-        app.add_url_rule('/{}/'.format(name),
-                         name,
-                         partial(generic_handler, name),
-                         methods=['GET', 'POST'])
+                app.add_url_rule('/{}/'.format(name),
+                                 name,
+                                 partial(generic_handler, name),
+                                 methods=['GET', 'POST'])
 
 
 @app.route('/', methods=['GET', 'POST'])

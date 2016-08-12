@@ -5,21 +5,12 @@ Copyright (C) 2016 PersonalGenomes.org
 
 This software is shared under the "MIT License" license (aka "Expat License"),
 see LICENSE.TXT for full license text.
-
-May be used on the command line from this project's base directory, e.g.
-
-   foreman run python -m sources.fitbit <user_id> files/
-
-This will assemble a data set for the user in that directory:
-
-   files/fitbit-storyline-data.tar.gz
 """
 
 from __future__ import unicode_literals
 
 import json
 import os
-import sys
 import time
 import urlparse
 
@@ -321,7 +312,6 @@ class FitbitSource(BaseSource):
     """
 
     oh_provider = 'fitbit'
-    oh_source = 'fitbit'
 
     def create_files(self):
         filename = 'fitbit-data.json'
@@ -347,7 +337,7 @@ class FitbitSource(BaseSource):
 
         print 'Finished creating Fitbit dataset locally.'
 
-    def cli(self):
+    def run_cli(self):
         while True:
             result = self.create_files()
 
@@ -365,13 +355,4 @@ class FitbitSource(BaseSource):
 
 
 if __name__ == '__main__':
-    if len(sys.argv) != 3:
-        print 'Please specify a user ID and directory.'
-
-        sys.exit(1)
-
-    fitbit = FitbitSource(oh_user_id=sys.argv[1],
-                          output_directory=sys.argv[2],
-                          local=True)
-
-    fitbit.cli()
+    FitbitSource.cli()

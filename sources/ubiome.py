@@ -1,16 +1,10 @@
-r"""
+"""
 uBiome fastq data extraction.
 
 Copyright (C) 2016 PersonalGenomes.org
 
 This software is shared under the "MIT License" license (aka "Expat License"),
 see LICENSE.TXT for full license text.
-
-May be used on the command line. For example, the following command:
-
-    python -m sources.ubiome ~/Downloads/uBiome.zip files
-
-Will assemble processed data sets in files/
 """
 
 import os
@@ -27,11 +21,10 @@ class UBiomeSource(BaseSource):
     Create Open Humans Dataset from uploaded uBiome data.
 
     Optional arguments:
-        samples: path to an online copy of the input file
+        samples: JSON that describes the member's uBiome samples
     """
 
-    def __init__(self, username, samples, **kwargs):
-        self.username = username
+    def __init__(self, samples, **kwargs):
         self.samples = samples
 
         super(UBiomeSource, self).__init__(**kwargs)
@@ -42,15 +35,12 @@ class UBiomeSource(BaseSource):
         """
         if input_filepath.endswith('.zip'):
             zip_file = zipfile.ZipFile(input_filepath)
+            zip_files = self.filter_archive(zip_file)
 
-            file_list = [f for f in zip_file.namelist()
-                         if not f.startswith('__MACOSX/')]
-
-            for filename in file_list:
+            for filename in zip_files:
                 if not filename.endswith('.fastq.gz'):
-                    self.sentry_log('uBiome file did not conform to '
-                                    'expected format. Username: {}'.format(
-                                        self.username))
+                    self.sentry_log(
+                        'uBiome file did not conform to expected format.')
 
                     raise ValueError(
                         'Found a filename that did not end with ".fastq.gz": '
@@ -58,10 +48,10 @@ class UBiomeSource(BaseSource):
         else:
             raise ValueError('Input file is expected to be a ZIP archive')
 
-    def create_datafiles(self):
+    def create_files(self):
         for sample in enumerate(self.samples):
             filename = self.get_remote_file(sample[1]['sequence_file']['url'])
-            input_file = os.path.join(self.temp_directory, filename)
+            input_file = self.temp_join(filename)
 
             self.verify_ubiome(input_file)
 
@@ -107,12 +97,10 @@ class UBiomeSource(BaseSource):
             })
 
 
-# if __name__ == '__main__':
-#     if len(sys.argv) != 4:
-#         print ('Please specify a remote file URL, target local directory, '
-#                'and username.')
+if __name__ == '__main__':
+    import click
 
-#         sys.exit(1)
+    cli = UBiomeSource.make_cli()
+    cli = click.option('--samples')(cli)
 
-#     create_datafiles(input_file=sys.argv[1], filedir=sys.argv[2],
-#                      username=sys.argv[3])
+    cli()

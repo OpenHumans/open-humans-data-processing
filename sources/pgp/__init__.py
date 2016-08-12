@@ -24,7 +24,6 @@ import json
 import os
 import re
 import shutil
-import sys
 
 import cgivar2gvcf
 import requests
@@ -41,11 +40,11 @@ class PGPSource(BaseSource):
     Create DataFiles for Open Humans from a PGP Harvard ID.
 
     Required arguments:
-        huID: PGP Harvard ID (string)
+        hu_id: PGP Harvard ID (string)
     """
 
-    def __init__(self, huID, **kwargs):
-        self.huID = huID
+    def __init__(self, hu_id, **kwargs):
+        self.hu_id = hu_id
 
         super(PGPSource, self).__init__(**kwargs)
 
@@ -169,7 +168,7 @@ class PGPSource(BaseSource):
                  (respectively) the outputs from parse_uploaded_div and
                  parse_survey_div.
         """
-        url = '{}/profile/{}'.format(BASE_URL, self.huID)
+        url = '{}/profile/{}'.format(BASE_URL, self.hu_id)
         profile_page = requests.get(url)
 
         assert profile_page.status_code == 200
@@ -220,7 +219,7 @@ class PGPSource(BaseSource):
         """
         var_description = ('PGP Harvard genome, Complete Genomics var file '
                            'format.')
-        new_filename = 'PGP-Harvard-{}-var.tsv'.format(self.huID)
+        new_filename = 'PGP-Harvard-{}-var.tsv'.format(self.hu_id)
 
         if filename.endswith('.bz2'):
             new_filename += '.bz2'
@@ -256,7 +255,7 @@ class PGPSource(BaseSource):
         """
         description = ('PGP Harvard genome, Complete Genomics masterVarBeta '
                        'file format.')
-        new_filename = 'PGP-Harvard-{}-masterVarBeta.tsv'.format(self.huID)
+        new_filename = 'PGP-Harvard-{}-masterVarBeta.tsv'.format(self.hu_id)
 
         if filename.endswith('.bz2'):
             new_filename += '.bz2'
@@ -284,7 +283,7 @@ class PGPSource(BaseSource):
         Returns temp file info as array of dicts. Only one dict expected.
         """
         description = 'PGP Harvard survey data, JSON format.'
-        survey_filename = 'PGP-Harvard-{}-surveys.json'.format(self.huID)
+        survey_filename = 'PGP-Harvard-{}-surveys.json'.format(self.hu_id)
         survey_filepath = os.path.join(self.temp_directory, survey_filename)
 
         with open(survey_filepath, 'w') as f:
@@ -315,12 +314,12 @@ class PGPSource(BaseSource):
                 raise IOError(
                     'Filename "genome_download.php" for PGP genome '
                     'indicates a broken link to the genome data file for {}! '
-                    'Aborting data retrieval.'.format(self.huID))
+                    'Aborting data retrieval.'.format(self.hu_id))
 
             self.sentry_log('PGP Complete Genomics filename in '
                             'unexpected format: {}'.format(filename))
 
-    def create_datafiles(self):
+    def create_files(self):
         file_links, survey_data, profile_url = self.parse_pgp_profile_page()
 
         if survey_data:
@@ -337,7 +336,3 @@ class PGPSource(BaseSource):
                 filename = self.get_remote_file(item['link'])
 
                 self.handle_uploaded_file(filename, source=item['link'])
-
-
-# if __name__ == '__main__':
-#     create_datafiles(huID=sys.argv[1], filedir=sys.argv[2])
