@@ -13,3 +13,4 @@ resource_files/*
 files/*
 scratch/*
 test_data/*
+sources/pgp/resources/hg19.2bit
