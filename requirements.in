@@ -5,6 +5,7 @@ beautifulsoup4==4.4.1
 boto==2.40.0
 celery==3.1.23
 cgivar2gvcf==0.1.7
+click==6.6
 Flask==0.11
 Flask-SQLAlchemy==2.1
 Flask-SSLify==0.1.5
