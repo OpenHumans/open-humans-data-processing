@@ -43,13 +43,14 @@ class BaseSource(object):
     no 'output_directory') must be specified.
     """
 
-    def __init__(self, input_file=None, file_url=None, local=False,
-                 oh_member_id=None, oh_update_url=None, oh_user_id=None,
-                 oh_username=None, output_directory=None, sentry=None,
-                 s3_key_dir=None, s3_bucket_name=None, return_status=None,
-                 **kwargs):
+    def __init__(self, input_file=None, file_url=None, force=False,
+                 local=False, oh_member_id=None, oh_update_url=None,
+                 oh_user_id=None, oh_username=None, output_directory=None,
+                 sentry=None, s3_key_dir=None, s3_bucket_name=None,
+                 return_status=None, **kwargs):
         self.input_file = input_file
         self.file_url = file_url
+        self.force = force
         self.local = local
         self.oh_member_id = oh_member_id
         self.oh_update_url = oh_update_url
@@ -59,7 +60,6 @@ class BaseSource(object):
         self.sentry = sentry
         self.s3_key_dir = s3_key_dir
         self.s3_bucket_name = s3_bucket_name
-        # XXX: change how this works?
         self.return_status = return_status
 
         self.temp_files = []
@@ -68,13 +68,17 @@ class BaseSource(object):
 
         self.coerce_file()
 
+    def get_current_files(self):
+        return self.open_humans_request(
+            url=self.files_url,
+            data={'user_id': self.oh_user_id, 'source': __name__},
+            method='get')
+
     def update_parameters(self):
-        params = self.open_humans_request(url=self.parameters_url,
-                                          data={
-                                              'user_id': self.oh_user_id,
-                                              'source': __name__,
-                                          },
-                                          method='get')
+        params = self.open_humans_request(
+            url=self.parameters_url,
+            data={'user_id': self.oh_user_id, 'source': __name__},
+            method='get')
 
         for name, value in params.items():
             setattr(self, name, value)
@@ -173,7 +177,7 @@ class BaseSource(object):
         return specified_filename
 
     @staticmethod
-    def should_update():
+    def should_update(files):
         """
         Sources should override this method and return True if the member's
         source data needs updating.
@@ -236,7 +240,8 @@ class BaseSource(object):
         if not self.local:
             self.update_open_humans()
 
-    def open_humans_request(self, data, url=None, method='get'):
+    @staticmethod
+    def open_humans_request(data, url=None, method='get'):
         args = {
             'url': url,
             'params': {
@@ -272,7 +277,7 @@ class BaseSource(object):
                                  method='post')
 
     def run(self):
-        if not self.should_update():
+        if not self.should_update(self.get_current_files()) and not self.force:
             return
 
         if not self.local:
@@ -303,6 +308,7 @@ class BaseSource(object):
         @click.option('-o', '--output-directory')
         @click.option('-u', '--oh-username')
         @click.option('-d', '--oh-user-id')
+        @click.option('-f', '--force', is_flag=True, default=False)
         @click.option('-l', '--local', is_flag=True, default=True)
         def base_cli(**kwargs):
             logging.basicConfig(level=logging.DEBUG)
