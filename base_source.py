@@ -48,10 +48,6 @@ class BaseSource(object):
                  oh_username=None, output_directory=None, sentry=None,
                  s3_key_dir=None, s3_bucket_name=None, return_status=None,
                  **kwargs):
-        if not output_directory and not (s3_key_dir and s3_bucket_name):
-            raise Exception(
-                'output_directory or S3 parameters must be provided')
-
         self.input_file = input_file
         self.file_url = file_url
         self.local = local
@@ -71,6 +67,23 @@ class BaseSource(object):
         self.temp_directory = tempfile.mkdtemp()
 
         self.coerce_file()
+
+    def update_parameters(self):
+        params = self.open_humans_request(url=self.parameters_url,
+                                          data={
+                                              'user_id': self.oh_user_id,
+                                              'source': __name__,
+                                          },
+                                          method='get')
+
+        for name, value in params.items():
+            setattr(self, name, value)
+
+    def validate_parameters(self):
+        if not self.output_directory and not (self.s3_key_dir and
+                                              self.s3_bucket_name):
+            raise Exception(
+                'output_directory or S3 parameters must be provided')
 
     def coerce_file(self):
         if self.file_url and self.input_file:
@@ -223,6 +236,26 @@ class BaseSource(object):
         if not self.local:
             self.update_open_humans()
 
+    def open_humans_request(self, data, url=None, method='get'):
+        args = {
+            'url': url,
+            'params': {
+                'key': PRE_SHARED_KEY,
+            },
+        }
+
+        if method == 'get' and data:
+            args['params'].update(data)
+        elif method == 'post' and data:
+            args['json'] = data
+
+        response = getattr(requests, method)(**args)
+
+        if method == 'get':
+            return response.json
+
+        return response
+
     def update_open_humans(self):
         task_data = {
             'data_files': self.data_files,
@@ -234,13 +267,18 @@ class BaseSource(object):
         logger.info('Updating main site (%s) with completed files with '
                     'task_data: %s', self.update_url, json.dumps(task_data))
 
-        requests.post(self.update_url,
-                      params={'key': PRE_SHARED_KEY},
-                      json={'task_data': task_data})
+        self.open_humans_request(url=self.update_url,
+                                 data={'task_data': task_data},
+                                 method='post')
 
     def run(self):
         if not self.should_update():
             return
+
+        if not self.local:
+            self.update_parameters()
+
+        self.validate_parameters()
 
         result = self.create_files()
 

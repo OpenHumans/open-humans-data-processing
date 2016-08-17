@@ -13,10 +13,7 @@ import pkgutil
 
 from functools import partial
 
-import requests
-
-from celery.signals import (after_setup_logger, after_task_publish,
-                            task_postrun, task_prerun)
+from celery.signals import after_setup_logger
 
 from flask import Flask, request
 from flask_sslify import SSLify
@@ -35,14 +32,15 @@ DEBUG = os.getenv('DEBUG', False)
 
 # A mapping of name/source argument pairs to send to the create_files
 # method
-EXTRA_DATA = {
-    'american_gut': {
-        'survey_ids': 'surveyIds',
-    },
-    'wildlife': {
-        'files': 'files',
-    },
-}
+# TODO: reimplement in Source
+# EXTRA_DATA = {
+#     'american_gut': {
+#         'survey_ids': 'surveyIds',
+#     },
+#     'wildlife': {
+#         'files': 'files',
+#     },
+# }
 
 SOURCES = {}
 
@@ -96,8 +94,6 @@ def trunc_strings(obj, chars=300):
         for i in enumerate(obj):
             obj[i] = trunc_strings(obj[i], chars=chars)
 
-    return obj
-
 
 def debug_json(value):
     """
@@ -109,103 +105,36 @@ def debug_json(value):
                       separators=(',', ': '))
 
 
-def make_task_data(task_id, task_state):
-    """
-    Format task data for the Open Humans update endpoint.
-    """
-    return {
-        'task_data': {
-            'task_id': task_id,
-            'task_state': task_state,
-        }
-    }
+# TODO: email here on errors?
+# @task_postrun.connect
+# def task_postrun_handler_cb(sender=None, state=None, kwargs=None,
+#                             retval=None, **other_kwargs):
+#     """
+#     Send update that task run is complete.
+#     """
+#     if sender == task_update:
+#         return
 
+#     logging.debug('task_postrun kwargs: %s', debug_json(kwargs))
 
-@celery_worker.task
-def task_update(update_url, task_data):
-    """
-    The 'after_task_publish' signal runs synchronously so we use celery itself
-    to run it asynchronously.
-    """
-    logging.info('Sending queued update')
+#     # A task that has resubmitted itself to the queue (e.g. due to hitting a
+#     # rate limit cap) will return this status. Don't update as complete.
+#     if retval and retval == 'resubmitted':
+#         logging.info('Not updating, this task has been resubmitted.')
 
-    requests.post(update_url, json=task_data)
+#         return
 
+#     update_url = kwargs.get('update_url')
+#     task_id = kwargs.get('task_id')
 
-@after_task_publish.connect
-def task_sent_handler_cb(sender=None, body=None, **other_kwargs):
-    """
-    Send update that task has been sent to queue.
-    """
-    if sender == 'data_processing.task_update':
-        return
+#     if not update_url or not task_id:
+#         return
 
-    logging.debug('after_task_publish body: %s', debug_json(body))
+#     task_data = make_task_data(task_id, state)
 
-    update_url = body['kwargs'].get('update_url')
-    task_id = body['kwargs'].get('task_id')
+#     logging.info('Scheduling task_postrun update')
 
-    if not update_url or not task_id:
-        return
-
-    task_data = make_task_data(task_id, 'QUEUED')
-
-    logging.info('Scheduling after_task_publish update')
-
-    task_update.apply_async(args=[update_url, task_data], queue='priority')
-
-
-@task_prerun.connect
-def task_prerun_handler_cb(sender=None, kwargs=None, **other_kwargs):
-    """
-    Send update that task is starting run.
-    """
-    if sender == task_update:
-        return
-
-    logging.debug('task_prerun kwargs: %s', debug_json(kwargs))
-
-    update_url = kwargs.get('update_url')
-    task_id = kwargs.get('task_id')
-
-    if not update_url or not task_id:
-        return
-
-    task_data = make_task_data(task_id, 'INITIATED')
-
-    logging.info('Scheduling task_prerun update')
-
-    task_update.apply_async(args=[update_url, task_data], queue='priority')
-
-
-@task_postrun.connect
-def task_postrun_handler_cb(sender=None, state=None, kwargs=None, retval=None,
-                            **other_kwargs):
-    """
-    Send update that task run is complete.
-    """
-    if sender == task_update:
-        return
-
-    logging.debug('task_postrun kwargs: %s', debug_json(kwargs))
-
-    # A task that has resubmitted itself to the queue (e.g. due to hitting a
-    # rate limit cap) will return this status. Don't update as complete.
-    if retval and retval == 'resubmitted':
-        logging.info('Not updating, this task has been resubmitted.')
-        return
-
-    update_url = kwargs.get('update_url')
-    task_id = kwargs.get('task_id')
-
-    if not update_url or not task_id:
-        return
-
-    task_data = make_task_data(task_id, state)
-
-    logging.info('Scheduling task_postrun update')
-
-    task_update.apply_async(args=[update_url, task_data], queue='priority')
+#     task_update.apply_async(args=[update_url, task_data], queue='priority')
 
 
 def load_sources():
@@ -223,7 +152,7 @@ def load_sources():
 
 
 @celery_worker.task
-def source_task(name, **task_params):
+def source_task(name, oh_user_id, **kwargs):
     """
     Task to run appropriate create_files method, with EXTRA_DATA mapping.
 
@@ -238,28 +167,20 @@ def source_task(name, **task_params):
     successfully.
 
     Otherwise, the method may return a dict containing the key 'countdown',
-    indicating the task needs to be re-queued. The countdown parameter indicates
-    the delay to impose on the re-queued task. This allows us to work
+    indicating the task needs to be re-queued. The countdown parameter
+    indicates the delay to impose on the re-queued task. This allows us to work
     gracefully with rate caps, caching successful queries in db and re-using
     those when re-running the task.
     """
-    mapping = EXTRA_DATA.get(name)
-
-    if mapping:
-        for key, value in mapping.items():
-            if value not in task_params['data']:
-                return
-
-            task_params[key] = task_params['data'][value]
-
-    source = SOURCES[name](sentry=sentry, **task_params)
-    return_status = source.run()
+    return_status = SOURCES[name](sentry=sentry,
+                                  oh_user_id=oh_user_id,
+                                  **kwargs).run()
 
     if return_status and 'countdown' in return_status:
-        task_params['return_status'] = return_status
+        kwargs.update({'return_status': return_status})
 
-        source_task.apply_async(args=[name],
-                                kwargs=task_params,
+        source_task.apply_async(args=[name, oh_user_id],
+                                kwargs=kwargs,
                                 countdown=return_status['countdown'])
 
         return 'resubmitted'
@@ -268,7 +189,7 @@ def source_task(name, **task_params):
 def generic_handler(name):
     logging.info('POST JSON: %s', debug_json(request.json))
 
-    source_task.delay(name, **request.json['task_params'])
+    source_task.delay(name, **request.json)
 
     return '{} dataset started'.format(name)
 
