@@ -8,11 +8,9 @@ see LICENSE.TXT for full license text.
 """
 
 import bz2
-import gzip
 import os
 import re
 import shutil
-import zipfile
 
 from cStringIO import StringIO
 from datetime import date, datetime

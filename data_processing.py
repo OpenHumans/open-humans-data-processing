@@ -94,6 +94,8 @@ def trunc_strings(obj, chars=300):
         for i in enumerate(obj):
             obj[i] = trunc_strings(obj[i], chars=chars)
 
+    return obj
+
 
 def debug_json(value):
     """
@@ -152,7 +154,7 @@ def load_sources():
 
 
 @celery_worker.task
-def source_task(name, oh_user_id, **kwargs):
+def source_task(name, **kwargs):
     """
     Task to run appropriate create_files method, with EXTRA_DATA mapping.
 
@@ -172,14 +174,12 @@ def source_task(name, oh_user_id, **kwargs):
     gracefully with rate caps, caching successful queries in db and re-using
     those when re-running the task.
     """
-    return_status = SOURCES[name](sentry=sentry,
-                                  oh_user_id=oh_user_id,
-                                  **kwargs).run()
+    return_status = SOURCES[name](sentry=sentry, **kwargs).run()
 
     if return_status and 'countdown' in return_status:
         kwargs.update({'return_status': return_status})
 
-        source_task.apply_async(args=[name, oh_user_id],
+        source_task.apply_async(args=[name],
                                 kwargs=kwargs,
                                 countdown=return_status['countdown'])
 

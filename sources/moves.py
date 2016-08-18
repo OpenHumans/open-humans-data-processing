@@ -46,10 +46,7 @@ class MovesSource(BaseSource):
         access_token: Moves access token
     """
 
-    def __init__(self, access_token, **kwargs):
-        self.access_token = access_token
-
-        super(MovesSource, self).__init__(**kwargs)
+    source = 'moves'
 
     def moves_query(self, path):
         """

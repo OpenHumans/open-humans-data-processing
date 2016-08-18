@@ -22,10 +22,7 @@ class VCFDataSource(BaseSource):
         vcf_data: array with vcf file links and metadata
     """
 
-    def __init__(self, vcf_data, **kwargs):
-        self.vcf_data = vcf_data
-
-        super(VCFDataSource, self).__init__(**kwargs)
+    source = 'vcf_data'
 
     @staticmethod
     def verify_vcf(input_file):

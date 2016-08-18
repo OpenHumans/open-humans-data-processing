@@ -43,10 +43,7 @@ class PGPSource(BaseSource):
         hu_id: PGP Harvard ID (string)
     """
 
-    def __init__(self, hu_id, **kwargs):
-        self.hu_id = hu_id
-
-        super(PGPSource, self).__init__(**kwargs)
+    source = 'pgp'
 
     @staticmethod
     def parse_uploaded_div(profile_soup):

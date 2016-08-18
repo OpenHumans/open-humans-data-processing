@@ -166,6 +166,8 @@ class AmericanGutSource(BaseSource):
         survey_ids: List of survey IDs
     """
 
+    source = 'american_gut'
+
     def handle_ena_info(self, ena_info, filename_base, source):
         tsv_filename = filename_base + '-ena-info.tsv'
         tsv_filepath = self.temp_join(tsv_filename)

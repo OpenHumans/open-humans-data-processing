@@ -8,7 +8,7 @@ import shutil
 import tempfile
 import zipfile
 
-from urlparse import urlsplit
+from urlparse import urljoin, urlsplit
 
 import click
 import requests
@@ -16,10 +16,6 @@ import requests
 from data_retrieval.files import copy_file_to_s3
 
 logger = logging.getLogger(__name__)
-
-OPEN_HUMANS_TOKEN_REFRESH_URL = os.getenv(
-    'OPEN_HUMANS_TOKEN_URL',
-    'https://www.openhumans.org/api/processing/refresh-token/')
 
 PRE_SHARED_KEY = os.getenv('PRE_SHARED_KEY')
 
@@ -44,7 +40,7 @@ class BaseSource(object):
     """
 
     def __init__(self, input_file=None, file_url=None, force=False,
-                 local=False, oh_member_id=None, oh_update_url=None,
+                 local=False, oh_member_id=None, oh_base_url=None,
                  oh_user_id=None, oh_username=None, output_directory=None,
                  sentry=None, s3_key_dir=None, s3_bucket_name=None,
                  return_status=None, **kwargs):
@@ -52,8 +48,8 @@ class BaseSource(object):
         self.file_url = file_url
         self.force = force
         self.local = local
+        self.oh_base_url = oh_base_url
         self.oh_member_id = oh_member_id
-        self.oh_update_url = oh_update_url
         self.oh_user_id = oh_user_id
         self.oh_username = oh_username
         self.output_directory = output_directory
@@ -66,19 +62,31 @@ class BaseSource(object):
         self.data_files = []
         self.temp_directory = tempfile.mkdtemp()
 
-        self.coerce_file()
+    @property
+    def files_url(self):
+        return urljoin(self.oh_base_url, 'data-files/')
+
+    @property
+    def parameters_url(self):
+        return urljoin(self.oh_base_url, 'parameters/')
+
+    @property
+    def update_url(self):
+        return urljoin(self.oh_base_url, 'task-update/')
 
     def get_current_files(self):
         return self.open_humans_request(
             url=self.files_url,
-            data={'user_id': self.oh_user_id, 'source': __name__},
+            data={'user_id': self.oh_user_id, 'source': self.source},
             method='get')
 
     def update_parameters(self):
         params = self.open_humans_request(
             url=self.parameters_url,
-            data={'user_id': self.oh_user_id, 'source': __name__},
+            data={'user_id': self.oh_user_id, 'source': self.source},
             method='get')
+
+        logger.info('params: %s', params)
 
         for name, value in params.items():
             setattr(self, name, value)
@@ -94,7 +102,7 @@ class BaseSource(object):
             raise Exception('Run with input_file or file_url, not both')
         elif self.file_url and not self.input_file:
             self.input_file = self.temp_join(
-                self.get_remotefile(self.file_url))
+                self.get_remote_file(self.file_url))
 
     def open_archive(self):
         error_message = ("Input file is expected to be either '.txt', "
@@ -184,25 +192,6 @@ class BaseSource(object):
         """
         return True
 
-    def refresh_token(self):
-        """
-        Get a fresh token from Open Humans for the given user ID and OAuth2
-        provider.
-        """
-        response = requests.post(
-            OPEN_HUMANS_TOKEN_REFRESH_URL,
-            params={'key': PRE_SHARED_KEY},
-            data={'user_id': self.oh_user_id, 'provider': self.oh_provider})
-
-        try:
-            result = response.json()
-        except ValueError:
-            print 'Unable to decode: {}'.format(response.text)
-
-            raise
-
-        return result['access_token']
-
     def move_file(self, filename):
         shutil.move(os.path.join(self.temp_directory, filename),
                     os.path.join(self.output_directory, filename))
@@ -257,7 +246,7 @@ class BaseSource(object):
         response = getattr(requests, method)(**args)
 
         if method == 'get':
-            return response.json
+            return response.json()
 
         return response
 
@@ -266,7 +255,7 @@ class BaseSource(object):
             'data_files': self.data_files,
             'oh_member_id': self.oh_member_id,
             'oh_user_id': self.oh_user_id,
-            'oh_source': __name__,
+            'oh_source': self.source,
         }
 
         logger.info('Updating main site (%s) with completed files with '
@@ -282,6 +271,8 @@ class BaseSource(object):
 
         if not self.local:
             self.update_parameters()
+
+        self.coerce_file()
 
         self.validate_parameters()
 

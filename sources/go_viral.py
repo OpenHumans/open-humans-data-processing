@@ -26,11 +26,7 @@ class GoViralSource(BaseSource):
         go_viral_id: the user's GoViral ID
     """
 
-    def __init__(self, access_token, go_viral_id, **kwargs):
-        self.access_token = access_token
-        self.go_viral_id = go_viral_id
-
-        super(GoViralSource, self).__init__(**kwargs)
+    source = 'go_viral'
 
     def get_go_viral_data(self):
         """

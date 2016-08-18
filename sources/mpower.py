@@ -24,6 +24,8 @@ class MPowerSource(BaseSource):
     Create Open Humans Dataset from uploaded mPower data.
     """
 
+    source = 'mpower'
+
     def verify_mpower(self, input_filepath):
         """
         Create clean file in mPower format from downloaded version

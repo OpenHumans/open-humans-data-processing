@@ -131,13 +131,16 @@ def vcf_from_raw_23andme(raw_23andme):
 
 
 class TwentyThreeAndMeSource(BaseSource):
-    def clean_raw_23andme(self):
-        """
-        Create clean file in 23andme format from downloaded version
+    """
+    Create clean file in 23andme format from downloaded version
 
-        Obsessively careful processing that ensures 23andMe file format changes
-        won't inadvertantly result in unexpected information, e.g. names.
-        """
+    Obsessively careful processing that ensures 23andMe file format changes
+    won't inadvertantly result in unexpected information, e.g. names.
+    """
+
+    source = 'twenty_three_and_me'
+
+    def clean_raw_23andme(self):
         input_file = self.open_archive()
 
         output = StringIO()

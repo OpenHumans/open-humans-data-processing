@@ -24,10 +24,7 @@ class UBiomeSource(BaseSource):
         samples: JSON that describes the member's uBiome samples
     """
 
-    def __init__(self, samples, **kwargs):
-        self.samples = samples
-
-        super(UBiomeSource, self).__init__(**kwargs)
+    source = 'ubiome'
 
     def verify_ubiome(self, input_filepath):
         """

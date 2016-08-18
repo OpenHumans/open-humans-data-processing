@@ -23,10 +23,7 @@ class WildlifeSource(BaseSource):
         files: dict containing filenames and URLs to the files
     """
 
-    def __init__(self, files, **kwargs):
-        self.files = files
-
-        super(WildlifeSource, self).__init__(**kwargs)
+    source = 'wildlife'
 
     def create_files(self):
         for filename in self.files:

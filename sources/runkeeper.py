@@ -82,10 +82,7 @@ class RunKeeperSource(BaseSource):
         access_token: RunKeeper access token
     """
 
-    def __init__(self, access_token, **kwargs):
-        self.access_token = access_token
-
-        super(RunKeeperSource, self).__init__(**kwargs)
+    source = 'runkeeper'
 
     def runkeeper_query(self, path, content_type=None):
         """
