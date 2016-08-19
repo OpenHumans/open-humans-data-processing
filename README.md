@@ -45,6 +45,23 @@ $ foreman run python
 >>> db.create_all()
 ```
 
+### Setting up a Redis server for requests-respectful
+
+The requests-respectful package requires a Redis server.
+
+To set this up in Ubuntu using apt-get:
+```
+sudo apt-get install redis-server
+```
+
+To set this up in OSX using brew:
+```
+brew install redis
+brew services start redis
+```
+
+Default configurations should work fine.
+
 ### Notes on S3 Bucket Permissions
 
 Putting these here for future reference, for understanding best practices in
