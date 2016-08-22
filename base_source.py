@@ -74,11 +74,32 @@ class BaseSource(object):
     def update_url(self):
         return urljoin(self.oh_base_url, 'task-update/')
 
+    @property
+    def archive_url(self):
+        return urljoin(self.oh_base_url, 'archive-data-files/')
+
     def get_current_files(self):
         return self.open_humans_request(
             url=self.files_url,
             data={'user_id': self.oh_user_id, 'source': self.source},
             method='get')
+
+    def archive_files(self):
+        """
+        The default implementation overrides all files; can be overridden by
+        subclasses.
+        """
+        self.archive_current_files()
+
+    def archive_current_files(self):
+        current_files = self.get_current_files()
+
+        response = self.open_humans_request(
+            url=self.archive_url,
+            data={'data_file_ids': [data_file['id']
+                                    for data_file in current_files]})
+
+        logger.info('remove files with IDs: "%s"', response.json()['ids'])
 
     def update_parameters(self):
         params = self.open_humans_request(
@@ -226,9 +247,6 @@ class BaseSource(object):
 
         shutil.rmtree(self.temp_directory)
 
-        if not self.local:
-            self.update_open_humans()
-
     @staticmethod
     def open_humans_request(data, url=None, method='get'):
         args = {
@@ -283,6 +301,11 @@ class BaseSource(object):
 
         self.move_files()
 
+        if not self.local:
+            self.archive_files()
+
+            self.update_open_humans()
+
     def run_cli(self):
         self.run()
 
@@ -291,7 +314,6 @@ class BaseSource(object):
         """
         Make a cli method that can be further extended by subclasses.
         """
-
         @click.command()
         @click.option('-a', '--access-token')
         @click.option('-f', '--file-url')
