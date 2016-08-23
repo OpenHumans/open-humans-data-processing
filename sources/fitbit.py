@@ -10,6 +10,7 @@ see LICENSE.TXT for full license text.
 from __future__ import unicode_literals
 
 import json
+import logging
 import os
 import time
 import urlparse
@@ -22,6 +23,8 @@ from requests_respectful import (RespectfulRequester,
 from base_source import BaseSource
 from models import CacheItem
 
+logger = logging.getLogger(__name__)
+
 if __name__ == '__main__':
     from utilities import init_db
 
@@ -32,9 +35,9 @@ else:
 redis_url = os.getenv('REDIS_URL', 'redis://localhost:6379')
 url_object = urlparse.urlparse(redis_url)
 
-print 'Connecting to redis at {}:{}, {}'.format(url_object.hostname,
-                                                url_object.port,
-                                                url_object.password)
+logger.info('Connecting to redis at %s:%s',
+            url_object.hostname,
+            url_object.port)
 
 RespectfulRequester.configure(
     redis={
@@ -241,7 +244,7 @@ def get_fitbit_data(access_token, open_humans_id):
             fitbit_data[url['name']] = []
 
             for year in xrange(start_year, current_year + 1):
-                print 'retrieving {}: {}'.format(url['name'], year)
+                logger.info('retrieving %s: %s', url['name'], year)
 
                 query_result = fitbit_query(
                     access_token=access_token,
@@ -278,7 +281,7 @@ def get_fitbit_data(access_token, open_humans_id):
             fitbit_data[url['name']] = []
 
             for year, month in dates:
-                print 'retrieving {}: {}, {}'.format(url['name'], year, month)
+                logger.info('retrieving %s: %s, %s', url['name'], year, month)
 
                 query_result = fitbit_query(
                     access_token=access_token,
@@ -292,7 +295,7 @@ def get_fitbit_data(access_token, open_humans_id):
                 fitbit_data[url['name']].append(query_result)
 
         # TODO: implement these once we're approved for Fitbit intraday access
-        for url in [url for url in fitbit_urls if url['period'] == 'day']:
+        for url in [u for u in fitbit_urls if u['period'] == 'day']:
             pass
     except RateLimitException:
         return {
@@ -335,8 +338,6 @@ class FitbitSource(BaseSource):
         with open(filepath, 'w') as f:
             json.dump(user_data, f, indent=2)
 
-        print 'Finished creating Fitbit dataset locally.'
-
     def run_cli(self):
         while True:
             result = self.create_files()
@@ -344,8 +345,8 @@ class FitbitSource(BaseSource):
             if result:
                 countdown = result['countdown']
 
-                print('Rate cap hit. Pausing {}s before resuming...'.format(
-                    countdown))
+                logger.info('Rate cap hit. Pausing %ds before resuming...',
+                            countdown)
 
                 time.sleep(countdown)
             else:
