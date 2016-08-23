@@ -17,6 +17,8 @@ from data_retrieval.files import copy_file_to_s3
 
 logger = logging.getLogger(__name__)
 
+# Used to authenticate data-processing to open-humans (and the inverse); must
+# be set in the environment on both sides
 PRE_SHARED_KEY = os.getenv('PRE_SHARED_KEY')
 
 
@@ -26,7 +28,6 @@ class BaseSource(object):
 
     Required arguments:
         oh_user_id: Open Humans user ID
-        oh_member_id: Open Humans member ID
 
     Optional arguments:
         output_directory: Local filepath, folder in which to place the
@@ -39,24 +40,22 @@ class BaseSource(object):
     no 'output_directory') must be specified.
     """
 
-    def __init__(self, input_file=None, file_url=None, force=False,
-                 local=False, oh_member_id=None, oh_base_url=None,
-                 oh_user_id=None, oh_username=None, output_directory=None,
-                 sentry=None, s3_key_dir=None, s3_bucket_name=None,
-                 return_status=None, **kwargs):
-        self.input_file = input_file
+    def __init__(self, file_url=None, force=False, input_file=None,
+                 local=False, oh_base_url=None, oh_user_id=None,
+                 oh_username=None, output_directory=None, return_status=None,
+                 s3_bucket_name=None, s3_key_dir=None, sentry=None, **kwargs):
         self.file_url = file_url
         self.force = force
+        self.input_file = input_file
         self.local = local
         self.oh_base_url = oh_base_url
-        self.oh_member_id = oh_member_id
         self.oh_user_id = oh_user_id
         self.oh_username = oh_username
         self.output_directory = output_directory
-        self.sentry = sentry
-        self.s3_key_dir = s3_key_dir
-        self.s3_bucket_name = s3_bucket_name
         self.return_status = return_status
+        self.s3_bucket_name = s3_bucket_name
+        self.s3_key_dir = s3_key_dir
+        self.sentry = sentry
 
         self.temp_files = []
         self.data_files = []
@@ -250,10 +249,10 @@ class BaseSource(object):
     @staticmethod
     def open_humans_request(data, url=None, method='get'):
         args = {
-            'url': url,
             'params': {
                 'key': PRE_SHARED_KEY,
             },
+            'url': url,
         }
 
         if method == 'get' and data:
@@ -271,9 +270,8 @@ class BaseSource(object):
     def update_open_humans(self):
         task_data = {
             'data_files': self.data_files,
-            'oh_member_id': self.oh_member_id,
-            'oh_user_id': self.oh_user_id,
             'oh_source': self.source,
+            'oh_user_id': self.oh_user_id,
         }
 
         logger.info('Updating main site (%s) with completed files with '
@@ -291,11 +289,11 @@ class BaseSource(object):
             self.update_parameters()
 
         self.coerce_file()
-
         self.validate_parameters()
 
         result = self.create_files()
 
+        # A result is only returned if we didn't successfully create files
         if result:
             return result
 
@@ -303,7 +301,6 @@ class BaseSource(object):
 
         if not self.local:
             self.archive_files()
-
             self.update_open_humans()
 
     def run_cli(self):
