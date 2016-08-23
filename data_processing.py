@@ -5,6 +5,7 @@ Flask app to run data retrieval tasks for Open Humans
 """
 
 import imp
+import inspect
 import json
 import logging
 import os
@@ -12,10 +13,7 @@ import pkgutil
 
 from functools import partial
 
-import requests
-
-from celery.signals import (after_setup_logger, after_task_publish,
-                            task_postrun, task_prerun)
+from celery.signals import after_setup_logger
 
 from flask import Flask, request
 from flask_sslify import SSLify
@@ -25,24 +23,26 @@ from werkzeug.contrib.fixers import ProxyFix
 
 from celery_worker import make_worker
 
+from base_source import BaseSource
 from models import db
 
 app = Flask(__name__)
 
 DEBUG = os.getenv('DEBUG', False)
 
-# A mapping of name/source argument pairs to send to the create_datafiles
+# A mapping of name/source argument pairs to send to the create_files
 # method
-EXTRA_DATA = {
-    'american_gut': {
-        'survey_ids': 'surveyIds',
-    },
-    'wildlife': {
-        'files': 'files',
-    },
-}
+# TODO: reimplement in Source
+# EXTRA_DATA = {
+#     'american_gut': {
+#         'survey_ids': 'surveyIds',
+#     },
+#     'wildlife': {
+#         'files': 'files',
+#     },
+# }
 
-DATAFILES = {}
+SOURCES = {}
 
 logging.basicConfig(level=logging.DEBUG if DEBUG else logging.INFO)
 logging.info('Starting data-processing')
@@ -91,8 +91,9 @@ def trunc_strings(obj, chars=300):
         for key in obj.keys():
             obj[key] = trunc_strings(obj[key], chars=chars)
     elif isinstance(obj, list):
-        for i in range(len(obj)):
+        for i in enumerate(obj):
             obj[i] = trunc_strings(obj[i], chars=chars)
+
     return obj
 
 
@@ -106,103 +107,36 @@ def debug_json(value):
                       separators=(',', ': '))
 
 
-def make_task_data(task_id, task_state):
-    """
-    Format task data for the Open Humans update endpoint.
-    """
-    return {
-        'task_data': {
-            'task_id': task_id,
-            'task_state': task_state,
-        }
-    }
+# TODO: email here on errors?
+# @task_postrun.connect
+# def task_postrun_handler_cb(sender=None, state=None, kwargs=None,
+#                             retval=None, **other_kwargs):
+#     """
+#     Send update that task run is complete.
+#     """
+#     if sender == task_update:
+#         return
 
+#     logging.debug('task_postrun kwargs: %s', debug_json(kwargs))
 
-@celery_worker.task
-def task_update(update_url, task_data):
-    """
-    The 'after_task_publish' signal runs synchronously so we use celery itself
-    to run it asynchronously.
-    """
-    logging.info('Sending queued update')
+#     # A task that has resubmitted itself to the queue (e.g. due to hitting a
+#     # rate limit cap) will return this status. Don't update as complete.
+#     if retval and retval == 'resubmitted':
+#         logging.info('Not updating, this task has been resubmitted.')
 
-    requests.post(update_url, json=task_data)
+#         return
 
+#     update_url = kwargs.get('update_url')
+#     task_id = kwargs.get('task_id')
 
-@after_task_publish.connect
-def task_sent_handler_cb(sender=None, body=None, **other_kwargs):
-    """
-    Send update that task has been sent to queue.
-    """
-    if sender == 'data_processing.task_update':
-        return
+#     if not update_url or not task_id:
+#         return
 
-    logging.debug('after_task_publish body: %s', debug_json(body))
+#     task_data = make_task_data(task_id, state)
 
-    update_url = body['kwargs'].get('update_url')
-    task_id = body['kwargs'].get('task_id')
+#     logging.info('Scheduling task_postrun update')
 
-    if not update_url or not task_id:
-        return
-
-    task_data = make_task_data(task_id, 'QUEUED')
-
-    logging.info('Scheduling after_task_publish update')
-
-    task_update.apply_async(args=[update_url, task_data], queue='priority')
-
-
-@task_prerun.connect
-def task_prerun_handler_cb(sender=None, kwargs=None, **other_kwargs):
-    """
-    Send update that task is starting run.
-    """
-    if sender == task_update:
-        return
-
-    logging.debug('task_prerun kwargs: %s', debug_json(kwargs))
-
-    update_url = kwargs.get('update_url')
-    task_id = kwargs.get('task_id')
-
-    if not update_url or not task_id:
-        return
-
-    task_data = make_task_data(task_id, 'INITIATED')
-
-    logging.info('Scheduling task_prerun update')
-
-    task_update.apply_async(args=[update_url, task_data], queue='priority')
-
-
-@task_postrun.connect
-def task_postrun_handler_cb(sender=None, state=None, kwargs=None, retval=None,
-                            **other_kwargs):
-    """
-    Send update that task run is complete.
-    """
-    if sender == task_update:
-        return
-
-    logging.debug('task_postrun kwargs: %s', debug_json(kwargs))
-
-    # A task that has resubmitted itself to the queue (e.g. due to hitting a
-    # rate limit cap) will return this status. Don't update as complete.
-    if retval and retval == 'resubmitted':
-        logging.info('Not updating, this task has been resubmitted.')
-        return
-
-    update_url = kwargs.get('update_url')
-    task_id = kwargs.get('task_id')
-
-    if not update_url or not task_id:
-        return
-
-    task_data = make_task_data(task_id, state)
-
-    logging.info('Scheduling task_postrun update')
-
-    task_update.apply_async(args=[update_url, task_data], queue='priority')
+#     task_update.apply_async(args=[update_url, task_data], queue='priority')
 
 
 def load_sources():
@@ -220,9 +154,9 @@ def load_sources():
 
 
 @celery_worker.task
-def datafiles_task(name, **task_params):
+def source_task(name, **kwargs):
     """
-    Task to run appropriate create_datafiles method, with EXTRA_DATA mapping.
+    Task to run appropriate create_files method, with EXTRA_DATA mapping.
 
     The 'name' parameter is used to look up the corresponding module, loaded
     by load_sources.
@@ -231,51 +165,50 @@ def datafiles_task(name, **task_params):
     task with the same paramaters. To do this, tasks that need requeueing
     return a dict containing a key 'countdown' (a delay added when requeued).
 
-    create_datafiles methods that return None are assumed to have completed
+    create_files methods that return None are assumed to have completed
     successfully.
 
     Otherwise, the method may return a dict containing the key 'countdown',
-    indicating the task needs to be re-queued. The countdown parameter indicates
-    the delay to impose on the re-queued task. This allows us to work
+    indicating the task needs to be re-queued. The countdown parameter
+    indicates the delay to impose on the re-queued task. This allows us to work
     gracefully with rate caps, caching successful queries in db and re-using
     those when re-running the task.
     """
-    mapping = EXTRA_DATA.get(name)
+    return_status = SOURCES[name](sentry=sentry, **kwargs).run()
 
-    if mapping:
-        for key, value in mapping.items():
-            if value not in task_params['data']:
-                return
-
-            task_params[key] = task_params['data'][value]
-
-    return_status = DATAFILES[name](sentry=sentry, **task_params)
     if return_status and 'countdown' in return_status:
-        task_params['return_status'] = return_status
-        datafiles_task.apply_async(args=[name],
-                                   kwargs=task_params,
-                                   countdown=return_status['countdown'])
+        kwargs.update({'return_status': return_status})
+
+        source_task.apply_async(args=[name],
+                                kwargs=kwargs,
+                                countdown=return_status['countdown'])
+
         return 'resubmitted'
 
 
 def generic_handler(name):
     logging.info('POST JSON: %s', debug_json(request.json))
 
-    datafiles_task.delay(name, **request.json['task_params'])
+    source_task.delay(name, **request.json)
 
     return '{} dataset started'.format(name)
 
 
 def add_rules():
     for name, source in load_sources():
-        logging.info('Adding "%s"', name)
+        for cls_name, cls in inspect.getmembers(source):
+            if (inspect.isclass(cls) and
+                    issubclass(cls, BaseSource) and
+                    cls is not BaseSource and
+                    name not in SOURCES):
+                logging.info('Adding "%s", "%s"', name, cls_name)
 
-        DATAFILES[name] = source.create_datafiles
+                SOURCES[name] = cls
 
-        app.add_url_rule('/{}/'.format(name),
-                         name,
-                         partial(generic_handler, name),
-                         methods=['GET', 'POST'])
+                app.add_url_rule('/{}/'.format(name),
+                                 name,
+                                 partial(generic_handler, name),
+                                 methods=['GET', 'POST'])
 
 
 @app.route('/', methods=['GET', 'POST'])
