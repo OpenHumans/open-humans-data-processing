@@ -3,6 +3,11 @@ import csv
 import random
 import sys
 
+import matplotlib
+
+# Heroku doesn't like the TkAgg backend
+matplotlib.use('Agg')
+
 import matplotlib.colors as colors
 import matplotlib.pyplot as plt
 
