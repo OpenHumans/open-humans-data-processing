@@ -15,6 +15,8 @@ import os
 import time
 import urlparse
 
+from collections import defaultdict
+
 import arrow
 
 from requests_respectful import (RespectfulRequester,
@@ -61,67 +63,67 @@ fitbit_urls = [
 
     # interday timeline data
     {'name': 'heart',
-     'url': '/{user_id}/activities/heart/date/{date}/1m.json',
+     'url': '/{user_id}/activities/heart/date/{start_date}/{end_date}.json',
      'period': 'month'},
     {'name': 'tracker-activity-calories',
-     'url': '/{user_id}/activities/tracker/activityCalories/date/{date}/1y.json',
+     'url': '/{user_id}/activities/tracker/activityCalories/date/{start_date}/{end_date}.json',
      'period': 'year'},
     {'name': 'tracker-calories',
-     'url': '/{user_id}/activities/tracker/calories/date/{date}/1y.json',
+     'url': '/{user_id}/activities/tracker/calories/date/{start_date}/{end_date}.json',
      'period': 'year'},
     {'name': 'tracker-distance',
-     'url': '/{user_id}/activities/tracker/distance/date/{date}/1y.json',
+     'url': '/{user_id}/activities/tracker/distance/date/{start_date}/{end_date}.json',
      'period': 'year'},
     {'name': 'tracker-elevation',
-     'url': '/{user_id}/activities/tracker/elevation/date/{date}/1y.json',
+     'url': '/{user_id}/activities/tracker/elevation/date/{start_date}/{end_date}.json',
      'period': 'year'},
     {'name': 'tracker-floors',
-     'url': '/{user_id}/activities/tracker/floors/date/{date}/1y.json',
+     'url': '/{user_id}/activities/tracker/floors/date/{start_date}/{end_date}.json',
      'period': 'year'},
     {'name': 'tracker-minutes-fairly-active',
-     'url': '/{user_id}/activities/tracker/minutesFairlyActive/date/{date}/1y.json',
+     'url': '/{user_id}/activities/tracker/minutesFairlyActive/date/{start_date}/{end_date}.json',
      'period': 'year'},
     {'name': 'tracker-minutes-lightly-active',
-     'url': '/{user_id}/activities/tracker/minutesLightlyActive/date/{date}/1y.json',
+     'url': '/{user_id}/activities/tracker/minutesLightlyActive/date/{start_date}/{end_date}.json',
      'period': 'year'},
     {'name': 'tracker-minutes-sedentary',
-     'url': '/{user_id}/activities/tracker/minutesSedentary/date/{date}/1y.json',
+     'url': '/{user_id}/activities/tracker/minutesSedentary/date/{start_date}/{end_date}.json',
      'period': 'year'},
     {'name': 'tracker-minutes-very-active',
-     'url': '/{user_id}/activities/tracker/minutesVeryActive/date/{date}/1y.json',
+     'url': '/{user_id}/activities/tracker/minutesVeryActive/date/{start_date}/{end_date}.json',
      'period': 'year'},
     {'name': 'tracker-steps',
-     'url': '/{user_id}/activities/tracker/steps/date/{date}/1y.json',
+     'url': '/{user_id}/activities/tracker/steps/date/{start_date}/{end_date}.json',
      'period': 'year'},
     {'name': 'weight-log',
-     'url': '/{user_id}/body/log/weight/date/{date}/1m.json',
+     'url': '/{user_id}/body/log/weight/date/{start_date}/{end_date}.json',
      'period': 'month'},
     {'name': 'weight',
-     'url': '/{user_id}/body/weight/date/{date}/1y.json',
+     'url': '/{user_id}/body/weight/date/{start_date}/{end_date}.json',
      'period': 'year'},
     {'name': 'sleep-awakenings',
-     'url': '/{user_id}/sleep/awakeningsCount/date/{date}/1y.json',
+     'url': '/{user_id}/sleep/awakeningsCount/date/{start_date}/{end_date}.json',
      'period': 'year'},
     {'name': 'sleep-efficiency',
-     'url': '/{user_id}/sleep/efficiency/date/{date}/1y.json',
+     'url': '/{user_id}/sleep/efficiency/date/{start_date}/{end_date}.json',
      'period': 'year'},
     {'name': 'sleep-minutes-after-wakeup',
-     'url': '/{user_id}/sleep/minutesAfterWakeup/date/{date}/1y.json',
+     'url': '/{user_id}/sleep/minutesAfterWakeup/date/{start_date}/{end_date}.json',
      'period': 'year'},
     {'name': 'sleep-minutes',
-     'url': '/{user_id}/sleep/minutesAsleep/date/{date}/1y.json',
+     'url': '/{user_id}/sleep/minutesAsleep/date/{start_date}/{end_date}.json',
      'period': 'year'},
     {'name': 'awake-minutes',
-     'url': '/{user_id}/sleep/minutesAwake/date/{date}/1y.json',
+     'url': '/{user_id}/sleep/minutesAwake/date/{start_date}/{end_date}.json',
      'period': 'year'},
     {'name': 'minutes-to-sleep',
-     'url': '/{user_id}/sleep/minutesToFallAsleep/date/{date}/1y.json',
+     'url': '/{user_id}/sleep/minutesToFallAsleep/date/{start_date}/{end_date}.json',
      'period': 'year'},
     {'name': 'sleep-start-time',
-     'url': '/{user_id}/sleep/startTime/date/{date}/1y.json',
+     'url': '/{user_id}/sleep/startTime/date/{start_date}/{end_date}.json',
      'period': 'year'},
     {'name': 'time-in-bed',
-     'url': '/{user_id}/sleep/timeInBed/date/{date}/1y.json',
+     'url': '/{user_id}/sleep/timeInBed/date/{start_date}/{end_date}.json',
      'period': 'year'},
 
     # intraday timeline data
@@ -213,7 +215,7 @@ def get_fitbit_data(access_token, open_humans_id):
     user_id = query_result['user']['encodedId']
     member_since = query_result['user']['memberSince']
 
-    fitbit_data = {
+    fitbit_data = defaultdict(list, {
         'profile': {
             'averageDailySteps': query_result['user']['averageDailySteps'],
             'encodedId': user_id,
@@ -223,7 +225,7 @@ def get_fitbit_data(access_token, open_humans_id):
             'strideLengthWalking': query_result['user']['strideLengthWalking'],
             'weight': query_result['user']['weight'],
         },
-    }
+    })
 
     try:
         for url in [u for u in fitbit_urls if u['period'] is None]:
@@ -241,8 +243,6 @@ def get_fitbit_data(access_token, open_humans_id):
             start_year = arrow.get(member_since, 'YYYY-MM-DD').year
             current_year = arrow.get().year
 
-            fitbit_data[url['name']] = []
-
             for year in xrange(start_year, current_year + 1):
                 logger.info('retrieving %s: %s', url['name'], year)
 
@@ -251,7 +251,8 @@ def get_fitbit_data(access_token, open_humans_id):
                     path=url['url'],
                     parameters={
                         'user_id': user_id,
-                        'date': '{}-01-01'.format(year),
+                        'start_date': '{}-01-01'.format(year),
+                        'end_date': '{}-12-31'.format(year),
                     },
                     open_humans_id=open_humans_id)
 
@@ -278,17 +279,18 @@ def get_fitbit_data(access_token, open_humans_id):
                 dates += [(year, month) for month
                           in range(start_month, end_month + 1)]
 
-            fitbit_data[url['name']] = []
-
             for year, month in dates:
                 logger.info('retrieving %s: %s, %s', url['name'], year, month)
+
+                day = arrow.get(year, month, 1).ceil('month').day
 
                 query_result = fitbit_query(
                     access_token=access_token,
                     path=url['url'],
                     parameters={
                         'user_id': user_id,
-                        'date': '{}-{:02d}-01'.format(year, month),
+                        'start_date': '{}-{:02d}-01'.format(year, month),
+                        'end_date': '{}-{:02d}-{}'.format(year, month, day),
                     },
                     open_humans_id=open_humans_id)
 
@@ -328,18 +330,26 @@ class FitbitSource(BaseSource):
             }
         })
 
-        fitbit_data = get_fitbit_data(self.refresh_token(), self.oh_user_id)
+        fitbit_data = get_fitbit_data(self.access_token, self.oh_user_id)
 
         if fitbit_data['rate_cap_encountered']:
             return {'countdown': 60}
 
-        user_data = fitbit_data['all_data']
-
         with open(filepath, 'w') as f:
-            json.dump(user_data, f, indent=2)
+            json.dump(fitbit_data['all_data'], f, indent=2)
 
     def run_cli(self):
         while True:
+            if (not self.should_update(self.get_current_files()) and
+                    not self.force):
+                return
+
+            if not self.local:
+                self.update_parameters()
+
+            self.coerce_file()
+            self.validate_parameters()
+
             result = self.create_files()
 
             if result:
@@ -351,6 +361,10 @@ class FitbitSource(BaseSource):
                 time.sleep(countdown)
             else:
                 break
+
+            if not self.local:
+                self.archive_files()
+                self.update_open_humans()
 
         self.move_files()
 

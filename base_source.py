@@ -40,10 +40,13 @@ class BaseSource(object):
     no 'output_directory') must be specified.
     """
 
-    def __init__(self, file_url=None, force=False, input_file=None,
-                 local=False, oh_base_url=None, oh_user_id=None,
-                 oh_username=None, output_directory=None, return_status=None,
-                 s3_bucket_name=None, s3_key_dir=None, sentry=None, **kwargs):
+    def __init__(self, access_token=None, file_url=None, force=False,
+                 input_file=None, local=False,
+                 oh_base_url='https://www.openhumans.org/data-import/',
+                 oh_user_id=None, oh_username=None, output_directory=None,
+                 return_status=None, s3_bucket_name=None, s3_key_dir=None,
+                 sentry=None, **kwargs):
+        self.access_token = access_token
         self.file_url = file_url
         self.force = force
         self.input_file = input_file
