@@ -322,7 +322,7 @@ class FitbitSource(BaseSource):
         try:
             fitbit_data = get_fitbit_data(self.access_token, self.oh_user_id)
         except RateLimitException:
-            return {'countdown': 60}
+            return {'countdown': 900}
 
         with open(filepath, 'w') as f:
             json.dump(fitbit_data, f, indent=2)
