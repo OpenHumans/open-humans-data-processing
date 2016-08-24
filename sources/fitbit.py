@@ -200,9 +200,7 @@ def get_fitbit_data(access_token, open_humans_id):
     """
     Iterate to get all items for a given access_token and path, return result.
 
-    Result is a dict with the following keys:
-        'all_data': data from all items, or None if rate cap hit.
-        'rate_cap_encountered': None, or True if rate cap hit.
+    Result is a dict of all of the fitbit data.
     """
     requests.register_realm('fitbit-{}'.format(open_humans_id),
                             max_requests=150, timespan=60)
@@ -227,88 +225,79 @@ def get_fitbit_data(access_token, open_humans_id):
         },
     })
 
-    try:
-        for url in [u for u in fitbit_urls if u['period'] is None]:
-            if not user_id and 'profile' in fitbit_data:
-                user_id = fitbit_data['profile']['user']['encodedId']
+    for url in [u for u in fitbit_urls if u['period'] is None]:
+        if not user_id and 'profile' in fitbit_data:
+            user_id = fitbit_data['profile']['user']['encodedId']
 
-            query_result = fitbit_query(access_token=access_token,
-                                        path=url['url'],
-                                        parameters={'user_id': user_id},
-                                        open_humans_id=open_humans_id)
+        query_result = fitbit_query(access_token=access_token,
+                                    path=url['url'],
+                                    parameters={'user_id': user_id},
+                                    open_humans_id=open_humans_id)
 
-            fitbit_data[url['name']] = query_result
+        fitbit_data[url['name']] = query_result
 
-        for url in [u for u in fitbit_urls if u['period'] == 'year']:
-            start_year = arrow.get(member_since, 'YYYY-MM-DD').year
-            current_year = arrow.get().year
+    for url in [u for u in fitbit_urls if u['period'] == 'year']:
+        start_year = arrow.get(member_since, 'YYYY-MM-DD').year
+        current_year = arrow.get().year
 
-            for year in xrange(start_year, current_year + 1):
-                logger.info('retrieving %s: %s', url['name'], year)
+        for year in xrange(start_year, current_year + 1):
+            logger.info('retrieving %s: %s', url['name'], year)
 
-                query_result = fitbit_query(
-                    access_token=access_token,
-                    path=url['url'],
-                    parameters={
-                        'user_id': user_id,
-                        'start_date': '{}-01-01'.format(year),
-                        'end_date': '{}-12-31'.format(year),
-                    },
-                    open_humans_id=open_humans_id)
+            query_result = fitbit_query(
+                access_token=access_token,
+                path=url['url'],
+                parameters={
+                    'user_id': user_id,
+                    'start_date': '{}-01-01'.format(year),
+                    'end_date': '{}-12-31'.format(year),
+                },
+                open_humans_id=open_humans_id)
 
-                fitbit_data[url['name']].append(query_result)
+            fitbit_data[url['name']].append(query_result)
 
-        for url in [u for u in fitbit_urls if u['period'] == 'month']:
-            start_date = arrow.get(member_since, 'YYYY-MM-DD')
-            today_date = arrow.get()
+    for url in [u for u in fitbit_urls if u['period'] == 'month']:
+        start_date = arrow.get(member_since, 'YYYY-MM-DD')
+        today_date = arrow.get()
 
-            dates = []
+        dates = []
 
-            for year in xrange(start_date.year, today_date.year + 1):
-                start_month = 1
-                end_month = 12
+        for year in xrange(start_date.year, today_date.year + 1):
+            start_month = 1
+            end_month = 12
 
-                if year == start_date.year == today_date.year:
-                    start_month = start_date.month
-                    end_month = today_date.month
-                elif year == start_date.year:
-                    start_month = start_date.month
-                elif year == today_date.year:
-                    end_month = today_date.month
+            if year == start_date.year == today_date.year:
+                start_month = start_date.month
+                end_month = today_date.month
+            elif year == start_date.year:
+                start_month = start_date.month
+            elif year == today_date.year:
+                end_month = today_date.month
 
-                dates += [(year, month) for month
-                          in range(start_month, end_month + 1)]
+            dates += [(year, month) for month
+                      in range(start_month, end_month + 1)]
 
-            for year, month in dates:
-                logger.info('retrieving %s: %s, %s', url['name'], year, month)
+        for year, month in dates:
+            logger.info('retrieving %s: %s, %s', url['name'], year, month)
 
-                day = arrow.get(year, month, 1).ceil('month').day
+            day = arrow.get(year, month, 1).ceil('month').day
 
-                query_result = fitbit_query(
-                    access_token=access_token,
-                    path=url['url'],
-                    parameters={
-                        'user_id': user_id,
-                        'start_date': '{}-{:02d}-01'.format(year, month),
-                        'end_date': '{}-{:02d}-{}'.format(year, month, day),
-                    },
-                    open_humans_id=open_humans_id)
+            query_result = fitbit_query(
+                access_token=access_token,
+                path=url['url'],
+                parameters={
+                    'user_id': user_id,
+                    'start_date': '{}-{:02d}-01'.format(year, month),
+                    'end_date': '{}-{:02d}-{}'.format(year, month, day),
+                },
+                open_humans_id=open_humans_id)
 
-                fitbit_data[url['name']].append(query_result)
+            fitbit_data[url['name']].append(query_result)
 
-        # TODO: implement these once we're approved for Fitbit intraday access
-        for url in [u for u in fitbit_urls if u['period'] == 'day']:
-            pass
-    except RateLimitException:
-        return {
-            'all_data': fitbit_data,
-            'rate_cap_encountered': True,
-        }
+    # TODO: implement these once we're approved for Fitbit intraday access
+    for url in [u for u in fitbit_urls if u['period'] == 'day']:
+        pass
 
-    return {
-        'all_data': fitbit_data,
-        'rate_cap_encountered': False,
-    }
+    return fitbit_data
 
 
 class FitbitSource(BaseSource):
@@ -330,13 +319,13 @@ class FitbitSource(BaseSource):
             }
         })
 
-        fitbit_data = get_fitbit_data(self.access_token, self.oh_user_id)
-
-        if fitbit_data['rate_cap_encountered']:
+        try:
+            fitbit_data = get_fitbit_data(self.access_token, self.oh_user_id)
+        except RateLimitException:
             return {'countdown': 60}
 
         with open(filepath, 'w') as f:
-            json.dump(fitbit_data['all_data'], f, indent=2)
+            json.dump(fitbit_data, f, indent=2)
 
     def run_cli(self):
         while True:
