@@ -106,7 +106,7 @@ class BaseSource(object):
             data={'data_file_ids': [data_file['id']
                                     for data_file in current_files]})
 
-        logger.info('remove files with IDs: "%s"', response.json()['ids'])
+        logger.info('remove files with IDs: "%s"', response['ids'])
 
     def update_parameters(self):
         params = self.open_humans_request(
