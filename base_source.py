@@ -84,7 +84,7 @@ class BaseSource(object):
         return self.open_humans_request(
             url=self.files_url,
             data={'user_id': self.oh_user_id, 'source': self.source},
-            method='get')
+            method='get')['results']
 
     def archive_files(self):
         """
@@ -95,6 +95,11 @@ class BaseSource(object):
 
     def archive_current_files(self):
         current_files = self.get_current_files()
+
+        if not current_files:
+            logger.info('no files to archive')
+
+            return
 
         response = self.open_humans_request(
             url=self.archive_url,
