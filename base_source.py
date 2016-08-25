@@ -104,15 +104,15 @@ class BaseSource(object):
         response = self.open_humans_request(
             url=self.archive_url,
             data={'data_file_ids': [data_file['id']
-                                    for data_file in current_files]})
+                                    for data_file in current_files]},
+            method='post')
 
         logger.info('remove files with IDs: "%s"', response['ids'])
 
     def update_parameters(self):
         params = self.open_humans_request(
             url=self.parameters_url,
-            data={'user_id': self.oh_user_id, 'source': self.source},
-            method='get')
+            data={'user_id': self.oh_user_id, 'source': self.source})
 
         logger.info('params: %s', params)
 
