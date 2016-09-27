@@ -196,7 +196,7 @@ def fitbit_query(access_token, path, open_humans_id, parameters=None):
     return query_result
 
 
-def get_fitbit_data(access_token, open_humans_id):
+def get_fitbit_data(access_token, open_humans_id, fitbit_data):
     """
     Iterate to get all items for a given access_token and path, return result.
 
@@ -213,17 +213,25 @@ def get_fitbit_data(access_token, open_humans_id):
     user_id = query_result['user']['encodedId']
     member_since = query_result['user']['memberSince']
 
-    fitbit_data = defaultdict(list, {
-        'profile': {
-            'averageDailySteps': query_result['user']['averageDailySteps'],
-            'encodedId': user_id,
-            'height': query_result['user']['height'],
-            'memberSince': member_since,
-            'strideLengthRunning': query_result['user']['strideLengthRunning'],
-            'strideLengthWalking': query_result['user']['strideLengthWalking'],
-            'weight': query_result['user']['weight'],
-        },
-    })
+    # Reset data if user account ID has changed.
+    if 'profile' in fitbit_data:
+        if fitbit_data['profile']['encodedId'] != user_id:
+            logging.info(
+                'User ID changed from {} to {}. Resetting all data.'.format(
+                    fitbit_data['profile']['encodedId'], user_id))
+            fitbit_data = defaultdict(dict)
+        else:
+            logging.debug('User ID ({}) matches old data.'.format(user_id))
+
+    fitbit_data['profile'] = {
+        'averageDailySteps': query_result['user']['averageDailySteps'],
+        'encodedId': user_id,
+        'height': query_result['user']['height'],
+        'memberSince': member_since,
+        'strideLengthRunning': query_result['user']['strideLengthRunning'],
+        'strideLengthWalking': query_result['user']['strideLengthWalking'],
+        'weight': query_result['user']['weight'],
+        }
 
     for url in [u for u in fitbit_urls if u['period'] is None]:
         if not user_id and 'profile' in fitbit_data:
@@ -241,7 +249,11 @@ def get_fitbit_data(access_token, open_humans_id):
         current_year = arrow.get().year
 
         for year in xrange(start_year, current_year + 1):
-            logger.info('retrieving %s: %s', url['name'], year)
+            if str(year) in fitbit_data[url['name']]:
+                logger.info(
+                    'Skipping retrieval for {}: {}'.format(url['name'], year))
+            else:
+                logger.info('Retrieving %s: %s', url['name'], year)
 
             query_result = fitbit_query(
                 access_token=access_token,
@@ -253,7 +265,7 @@ def get_fitbit_data(access_token, open_humans_id):
                 },
                 open_humans_id=open_humans_id)
 
-            fitbit_data[url['name']].append(query_result)
+            fitbit_data[url['name']][str(year)] = query_result
 
     for url in [u for u in fitbit_urls if u['period'] == 'month']:
         start_date = arrow.get(member_since, 'YYYY-MM-DD')
@@ -277,7 +289,12 @@ def get_fitbit_data(access_token, open_humans_id):
                       in range(start_month, end_month + 1)]
 
         for year, month in dates:
-            logger.info('retrieving %s: %s, %s', url['name'], year, month)
+            year_month = '{}-{:02d}'.format(year, month)
+            if year_month in fitbit_data[url['name']]:
+                logger.info('Skipping retrieval for {}: {}'.format(
+                            url['name'], year_month))
+            else:
+                logger.info('Retrieving %s: %s', url['name'], year_month)
 
             day = arrow.get(year, month, 1).ceil('month').day
 
@@ -286,12 +303,12 @@ def get_fitbit_data(access_token, open_humans_id):
                 path=url['url'],
                 parameters={
                     'user_id': user_id,
-                    'start_date': '{}-{:02d}-01'.format(year, month),
-                    'end_date': '{}-{:02d}-{}'.format(year, month, day),
+                    'start_date': '{}-01'.format(year_month),
+                    'end_date': '{}-{}'.format(year_month, day),
                 },
                 open_humans_id=open_humans_id)
 
-            fitbit_data[url['name']].append(query_result)
+            fitbit_data[url['name']][year_month] = query_result
 
     # TODO: implement these once we're approved for Fitbit intraday access
     for url in [u for u in fitbit_urls if u['period'] == 'day']:
@@ -307,6 +324,53 @@ class FitbitSource(BaseSource):
 
     source = 'fitbit'
 
+    def load_existing_fitbit_data(self):
+        file_info = self.get_current_files()
+        target_file = None
+        stored_data = defaultdict(dict)
+
+        for file_item in file_info:
+            if file_item['basename'] == 'fitbit-data.json':
+                target_file = file_item
+        if target_file:
+            local_data_file = self.get_remote_file(target_file['download_url'])
+            with open(self.temp_join(local_data_file)) as f:
+                current_data = json.load(f)
+
+            stored_data = defaultdict(dict)
+
+            # Profile saved to check user ID, will be overwritten after.
+            if 'profile' in current_data:
+                stored_data['profile'] = current_data['profile']
+
+            # Retain all but the most recent year as stored yearly data.
+            for url in [u for u in fitbit_urls if u['period'] == 'year']:
+                name = url['name']
+                current_years = [str(x) for x in current_data[name].keys()]
+                most_recent = str(max([
+                    arrow.get('{}-01'.format(y)) for y in current_years]).year)
+
+                assert most_recent in current_years
+                for year in current_years:
+                    if year == most_recent:
+                        continue
+                    stored_data[name][year] = current_data[name][year]
+
+            # Retain all but the most recent month as stored monthly data.
+            for url in [u for u in fitbit_urls if u['period'] == 'month']:
+                name = url['name']
+                current_months = current_data[name].keys()
+                most_recent = max([
+                    arrow.get(m) for m in current_months]).format('YYYY-MM')
+
+                assert most_recent in current_months
+                for month in current_months:
+                    if month == most_recent:
+                        continue
+                    stored_data[name][month] = current_data[name][month]
+
+        return stored_data
+
     def create_files(self):
         filename = 'fitbit-data.json'
         filepath = os.path.join(self.temp_directory, filename)
@@ -319,8 +383,11 @@ class FitbitSource(BaseSource):
             }
         })
 
+        stored_data = self.load_existing_fitbit_data()
+
         try:
-            fitbit_data = get_fitbit_data(self.access_token, self.oh_user_id)
+            fitbit_data = get_fitbit_data(self.access_token, self.oh_user_id,
+                                          fitbit_data=stored_data)
         except RateLimitException:
             return {'countdown': 900}
 
@@ -328,6 +395,9 @@ class FitbitSource(BaseSource):
             json.dump(fitbit_data, f, indent=2)
 
     def run_cli(self):
+        """
+        Override to loop/wait for command line use (no celery requeuing).
+        """
         while True:
             if (not self.should_update(self.get_current_files()) and
                     not self.force):
