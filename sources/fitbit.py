@@ -9,6 +9,7 @@ see LICENSE.TXT for full license text.
 
 from __future__ import unicode_literals
 
+from datetime import timedelta
 import json
 import logging
 import os
@@ -52,6 +53,11 @@ RespectfulRequester.configure(
 
 requests = RespectfulRequester()
 requests.register_realm('fitbit', max_requests=3600, timespan=60)
+
+# Only use cached responses no older than CACHE_MAX.
+CACHE_MAX = timedelta(weeks=1)
+# Used stored data only if it's older than STORAGE_MIN.
+STORAGE_MIN = timedelta(weeks=4)
 
 fitbit_urls = [
     # Requires the 'settings' scope, which we haven't asked for
@@ -170,7 +176,9 @@ def fitbit_query(access_token, path, open_humans_id, parameters=None):
                        .first())
 
     if cached_response:
-        return cached_response.response
+        cache_time = arrow.get(cached_response.request_time)
+        if cache_time - arrow.get() <= CACHE_MAX:
+            return cached_response.response
 
     try:
         data_response = requests.get(
@@ -178,10 +186,12 @@ def fitbit_query(access_token, path, open_humans_id, parameters=None):
             headers=headers,
             realms=['fitbit', 'fitbit-{}'.format(open_humans_id)])
     except RequestsRespectfulRateLimitedError:
+        logging.info('Requests-respectful reports rate limit hit.')
         raise RateLimitException()
 
     # If a rate cap is encountered, return a result reporting this.
     if data_response.status_code == 429:
+        logging.info('Fitbit reports rate limit hit!')
         raise RateLimitException()
 
     query_result = data_response.json()
@@ -212,6 +222,7 @@ def get_fitbit_data(access_token, open_humans_id, fitbit_data):
     # store the user ID since it's used in all future queries
     user_id = query_result['user']['encodedId']
     member_since = query_result['user']['memberSince']
+    start_date = arrow.get(member_since, 'YYYY-MM-DD')
 
     # Reset data if user account ID has changed.
     if 'profile' in fitbit_data:
@@ -245,74 +256,77 @@ def get_fitbit_data(access_token, open_humans_id, fitbit_data):
         fitbit_data[url['name']] = query_result
 
     for url in [u for u in fitbit_urls if u['period'] == 'year']:
-        start_year = arrow.get(member_since, 'YYYY-MM-DD').year
-        current_year = arrow.get().year
+        for year_date in arrow.Arrow.range('year', start_date, arrow.get()):
+            year = year_date.format('YYYY')
 
-        for year in xrange(start_year, current_year + 1):
-            if str(year) in fitbit_data[url['name']]:
-                logger.info(
-                    'Skipping retrieval for {}: {}'.format(url['name'], year))
-            else:
-                logger.info('Retrieving %s: %s', url['name'], year)
+            if year_date.ceil('year') - arrow.get() >= STORAGE_MIN:
+                if year in fitbit_data[url['name']]:
+                    logger.info('Skip retrieval {}: {}'.format(
+                                url['name'], year))
+                    continue
 
+            logger.info('Retrieving %s: %s', url['name'], year)
             query_result = fitbit_query(
                 access_token=access_token,
                 path=url['url'],
                 parameters={
                     'user_id': user_id,
-                    'start_date': '{}-01-01'.format(year),
-                    'end_date': '{}-12-31'.format(year),
+                    'start_date': year_date.floor('year').format('YYYY-MM-DD'),
+                    'end_date': year_date.ceil('year').format('YYYY-MM-DD'),
                 },
                 open_humans_id=open_humans_id)
 
             fitbit_data[url['name']][str(year)] = query_result
 
     for url in [u for u in fitbit_urls if u['period'] == 'month']:
-        start_date = arrow.get(member_since, 'YYYY-MM-DD')
-        today_date = arrow.get()
+        for month_date in arrow.Arrow.range('month', start_date, arrow.get()):
+            month = month_date.format('YYYY-MM')
 
-        dates = []
+            if month_date.ceil('month') - arrow.get() >= STORAGE_MIN:
+                if month in fitbit_data[url['name']]:
+                    logger.info('Skipping retrieval for {}: {}'.format(
+                                url['name'], month))
+                    continue
 
-        for year in xrange(start_date.year, today_date.year + 1):
-            start_month = 1
-            end_month = 12
-
-            if year == start_date.year == today_date.year:
-                start_month = start_date.month
-                end_month = today_date.month
-            elif year == start_date.year:
-                start_month = start_date.month
-            elif year == today_date.year:
-                end_month = today_date.month
-
-            dates += [(year, month) for month
-                      in range(start_month, end_month + 1)]
-
-        for year, month in dates:
-            year_month = '{}-{:02d}'.format(year, month)
-            if year_month in fitbit_data[url['name']]:
-                logger.info('Skipping retrieval for {}: {}'.format(
-                            url['name'], year_month))
-            else:
-                logger.info('Retrieving %s: %s', url['name'], year_month)
-
-            day = arrow.get(year, month, 1).ceil('month').day
-
+            logger.info('Retrieving %s: %s', url['name'], month)
             query_result = fitbit_query(
                 access_token=access_token,
                 path=url['url'],
                 parameters={
                     'user_id': user_id,
-                    'start_date': '{}-01'.format(year_month),
-                    'end_date': '{}-{}'.format(year_month, day),
+                    'start_date': month_date.floor('month').format('YYYY-MM-DD'),
+                    'end_date': month_date.ceil('month').format('YYYY-MM-DD'),
                 },
                 open_humans_id=open_humans_id)
 
-            fitbit_data[url['name']][year_month] = query_result
+            fitbit_data[url['name']][month] = query_result
 
-    # TODO: implement these once we're approved for Fitbit intraday access
     for url in [u for u in fitbit_urls if u['period'] == 'day']:
-        pass
+        for day_date in arrow.Arrow.range('day', start_date, arrow.get()):
+            continue
+
+            # Intraday retrieval -- not currently authorized.
+            """
+            day = day_date.format('YYYY-MM-DD')
+
+            if day_date.ceil('day') - arrow.get() >= STORAGE_MIN:
+                if day in fitbit_data[url['name']]:
+                    logger.info('Skipping retrieval for {}: {}'.format(
+                                url['name'], day))
+                    continue
+
+            logger.info('Retrieving %s: %s', url['name'], day)
+            query_result = fitbit_query(
+                access_token=access_token,
+                path=url['url'],
+                parameters={
+                    'user_id': user_id,
+                    'date': day.format('YYYY-MM-DD'),
+                },
+                open_humans_id=open_humans_id)
+
+            fitbit_data[url['name']][day] = query_result
+            """
 
     return fitbit_data
 
