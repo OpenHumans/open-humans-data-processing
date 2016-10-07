@@ -55,10 +55,15 @@ requests = RespectfulRequester()
 requests.register_realm('fitbit', max_requests=3600, timespan=60)
 
 # Only use cached data if cached less than CACHE_MAX before now.
-CACHE_MAX = timedelta(weeks=1)
 # Cache target dates older than CACHE_MIN before now.
+# Based on these settings 23 URLs won't be cached, and full data retrieval
+# requires around 6 to 7 hours per year of data.
+CACHE_MAX = timedelta(weeks=1)
 CACHE_MIN = timedelta(days=1)
+
 # Use stored data if older than STORAGE_MIN relative to guessed storage date.
+# Refreshing stored data rejects ~85 URLs, but the hourly API cap is unlikely
+# to be hit unless more than a couple weeks have passed since previous storage.
 STORAGE_MIN = timedelta(weeks=4)
 
 fitbit_urls = [
@@ -139,7 +144,7 @@ fitbit_urls = [
      'url': '/-/activities/heart/date/{date}/1d/1sec.json',
      'period': 'day'},
     {'name': 'intraday-steps',
-     'url': '/-/activities/tracker/steps/date/{date}/1d/1min.json',
+     'url': '/-/activities/steps/date/{date}/1d/1min.json',
      'period': 'day'},
 ]
 
@@ -212,6 +217,11 @@ def fitbit_query(access_token, path, open_humans_id, parameters=None,
     if data_response.status_code == 429:
         logging.info('Fitbit reports rate limit hit!')
         raise RateLimitException()
+    if data_response.status_code == 504:
+        logging.info('Fitbit server reports 504 response timeout!')
+        raise RateLimitException()
+    logging.debug('Fitbit returns status code: {}'.format(
+        data_response.status_code))
 
     query_result = data_response.json()
 
@@ -286,11 +296,9 @@ def get_fitbit_data(access_token, open_humans_id, fitbit_data):
         for year_date in years:
             year = year_date.format('YYYY')
 
-            if year_date.ceil('year') - arrow.get() >= STORAGE_MIN:
-                if year in fitbit_data[url['name']]:
-                    logger.debug('Skip retrieval {}: {}'.format(
-                                url['name'], year))
-                    continue
+            if year in fitbit_data[url['name']]:
+                logger.info('Skip retrieval {}: {}'.format(url['name'], year))
+                continue
 
             logger.info('Retrieving %s: %s', url['name'], year)
             query_result = fitbit_query(
@@ -312,11 +320,9 @@ def get_fitbit_data(access_token, open_humans_id, fitbit_data):
         for month_date in months:
             month = month_date.format('YYYY-MM')
 
-            if month_date.ceil('month') - arrow.get() >= STORAGE_MIN:
-                if month in fitbit_data[url['name']]:
-                    logger.debug('Skipping retrieval for {}: {}'.format(
-                                url['name'], month))
-                    continue
+            if month in fitbit_data[url['name']]:
+                logger.info('Skip retrieval {}: {}'.format(url['name'], month))
+                continue
 
             logger.info('Retrieving %s: %s', url['name'], month)
             query_result = fitbit_query(
@@ -332,19 +338,21 @@ def get_fitbit_data(access_token, open_humans_id, fitbit_data):
 
             fitbit_data[url['name']][month] = query_result
 
+    # Intraday retrieval -- not currently authorized.
+    """
     for url in [u for u in fitbit_urls if u['period'] == 'day']:
-        for day_date in arrow.Arrow.range('day', start_date, arrow.get()):
-            continue
+        days = arrow.Arrow.range('day', start_date.floor('day'),
+                                 arrow.get())
+
+        for day_date in days:
+            # continue
 
             # Intraday retrieval -- not currently authorized.
-            """
             day = day_date.format('YYYY-MM-DD')
 
-            if day_date.ceil('day') - arrow.get() >= STORAGE_MIN:
-                if day in fitbit_data[url['name']]:
-                    logger.info('Skipping retrieval for {}: {}'.format(
-                                url['name'], day))
-                    continue
+            if day in fitbit_data[url['name']]:
+                logger.info('Skip retrieval {}: {}'.format(url['name'], day))
+                continue
 
             logger.info('Retrieving %s: %s', url['name'], day)
             query_result = fitbit_query(
@@ -352,12 +360,13 @@ def get_fitbit_data(access_token, open_humans_id, fitbit_data):
                 path=url['url'],
                 parameters={
                     'user_id': user_id,
-                    'date': day.format('YYYY-MM-DD'),
+                    'date': day,
                 },
-                open_humans_id=open_humans_id)
+                open_humans_id=open_humans_id,
+                target_date=day_date.ceil('day'))
 
             fitbit_data[url['name']][day] = query_result
-            """
+    """
 
     return fitbit_data
 
@@ -491,7 +500,7 @@ class FitbitSource(BaseSource):
             return {'countdown': 900}
 
         with open(filepath, 'w') as f:
-            json.dump(fitbit_data, f, indent=2)
+            json.dump(fitbit_data, f)
 
     def run_cli(self):
         """
