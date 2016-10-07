@@ -54,9 +54,11 @@ RespectfulRequester.configure(
 requests = RespectfulRequester()
 requests.register_realm('fitbit', max_requests=3600, timespan=60)
 
-# Only use cached responses no older than CACHE_MAX.
+# Only use cached data if cached less than CACHE_MAX before now.
 CACHE_MAX = timedelta(weeks=1)
-# Used stored data only if it's older than STORAGE_MIN.
+# Cache target dates older than CACHE_MIN before now.
+CACHE_MIN = timedelta(days=1)
+# Use stored data if older than STORAGE_MIN relative to guessed storage date.
 STORAGE_MIN = timedelta(weeks=4)
 
 fitbit_urls = [
@@ -153,9 +155,16 @@ class RateLimitException(Exception):
     pass
 
 
-def fitbit_query(access_token, path, open_humans_id, parameters=None):
+def fitbit_query(access_token, path, open_humans_id, parameters=None,
+                 target_date=None):
     """
     Query Fitbit API and return result.
+
+    Cache queries if the date for target data is greater than CACHE_MIN
+    before now. Use cached queries if the cache time was less than CACHE_MAX
+    before now.
+
+    If no date is associated with target data, don't use query caching.
     """
     if not parameters:
         parameters = {}
@@ -177,8 +186,18 @@ def fitbit_query(access_token, path, open_humans_id, parameters=None):
 
     if cached_response:
         cache_time = arrow.get(cached_response.request_time)
-        if cache_time - arrow.get() <= CACHE_MAX:
-            return cached_response.response
+        if arrow.get() - cache_time <= CACHE_MAX:
+            # Extra check -- data shouldn't have been cached in first place.
+            if target_date and cache_time - target_date > CACHE_MIN:
+                logging.debug('Loading cache for {}, cache time {} vs target date {} less than '
+                              'CACHE_MIN'.format(data_key, cache_time, target_date))
+                return cached_response.response
+            else:
+                logging.debug('Rejecting cache for {}, data should not have '
+                              'been cached.'.format(data_key))
+        else:
+            logging.debug('Rejecting cache for {}, cache date more than '
+                          'CACHE_MAX'.format(data_key))
 
     try:
         data_response = requests.get(
@@ -200,8 +219,13 @@ def fitbit_query(access_token, path, open_humans_id, parameters=None):
             and not query_result['success']):
         raise Exception(query_result['errors'])
 
-    db.session.add(CacheItem(data_key, query_result))
-    db.session.commit()
+    # Cache if the data's target date is more than CACHE_MIN before now.
+    if target_date and (arrow.get() - target_date > CACHE_MIN):
+        db.session.add(CacheItem(data_key, query_result))
+        db.session.commit()
+    else:
+        logging.debug('{} not cached, data less than CACHE_MIN before '
+                      'now.'.format(data_key))
 
     return query_result
 
@@ -251,17 +275,20 @@ def get_fitbit_data(access_token, open_humans_id, fitbit_data):
         query_result = fitbit_query(access_token=access_token,
                                     path=url['url'],
                                     parameters={'user_id': user_id},
-                                    open_humans_id=open_humans_id)
+                                    open_humans_id=open_humans_id,
+                                    target_date=arrow.get())
 
         fitbit_data[url['name']] = query_result
 
     for url in [u for u in fitbit_urls if u['period'] == 'year']:
-        for year_date in arrow.Arrow.range('year', start_date, arrow.get()):
+        years = arrow.Arrow.range('year', start_date.floor('year'),
+                                  arrow.get())
+        for year_date in years:
             year = year_date.format('YYYY')
 
             if year_date.ceil('year') - arrow.get() >= STORAGE_MIN:
                 if year in fitbit_data[url['name']]:
-                    logger.info('Skip retrieval {}: {}'.format(
+                    logger.debug('Skip retrieval {}: {}'.format(
                                 url['name'], year))
                     continue
 
@@ -274,17 +301,20 @@ def get_fitbit_data(access_token, open_humans_id, fitbit_data):
                     'start_date': year_date.floor('year').format('YYYY-MM-DD'),
                     'end_date': year_date.ceil('year').format('YYYY-MM-DD'),
                 },
-                open_humans_id=open_humans_id)
+                open_humans_id=open_humans_id,
+                target_date=year_date.ceil('year'))
 
             fitbit_data[url['name']][str(year)] = query_result
 
     for url in [u for u in fitbit_urls if u['period'] == 'month']:
-        for month_date in arrow.Arrow.range('month', start_date, arrow.get()):
+        months = arrow.Arrow.range('month', start_date.floor('month'),
+                                   arrow.get())
+        for month_date in months:
             month = month_date.format('YYYY-MM')
 
             if month_date.ceil('month') - arrow.get() >= STORAGE_MIN:
                 if month in fitbit_data[url['name']]:
-                    logger.info('Skipping retrieval for {}: {}'.format(
+                    logger.debug('Skipping retrieval for {}: {}'.format(
                                 url['name'], month))
                     continue
 
@@ -297,7 +327,8 @@ def get_fitbit_data(access_token, open_humans_id, fitbit_data):
                     'start_date': month_date.floor('month').format('YYYY-MM-DD'),
                     'end_date': month_date.ceil('month').format('YYYY-MM-DD'),
                 },
-                open_humans_id=open_humans_id)
+                open_humans_id=open_humans_id,
+                target_date=month_date.ceil('month'))
 
             fitbit_data[url['name']][month] = query_result
 
@@ -338,7 +369,50 @@ class FitbitSource(BaseSource):
 
     source = 'fitbit'
 
+    @staticmethod
+    def _guess_storage_date(stored_data):
+        """
+        Return earliest date stored data may have been generated.
+
+        This date is used to determine which stored data is/was old enough
+        to trust (and not refresh). Data older than STORAGE_MIN relative
+        to the guessed storage date is trusted and reused.
+
+        We impose the STORAGE_MIN cutoff to try to reduce the chances of
+        permanently storing incomplete data.
+        """
+        for url in [u for u in fitbit_urls if u['period'] == 'month']:
+            current_months = stored_data[url['name']].keys()
+            if current_months:
+                most_recent = max([arrow.get(m) for m in
+                                   current_months]).floor('month')
+                logging.debug('Storage date guess: {}'.format(most_recent))
+                return most_recent
+
+        for url in [u for u in fitbit_urls if u['period'] == 'year']:
+            current_years = stored_data[url['name']].keys()
+            if current_years:
+                most_recent = max([arrow.get('{}-01'.format(y)) for y in
+                                   current_years]).floor('year')
+                logging.debug('Storage date guess: {}'.format(most_recent))
+                return most_recent
+
+        # Fall back on an arbitrary early date.
+        most_recent = arrow.get('2000-01-01')
+        logging.debug('Storage date guess: {}'.format(most_recent))
+        return most_recent
+
     def load_existing_fitbit_data(self):
+        """
+        Load existing fitbit data.
+
+        Based on the guessed date this data was previously retrieved,
+        re-use any data that was older than STORAGE_MIN relative to that date.
+
+        Also return profile information in returned data. This should be
+        overwritten, but is needed to check that the target Fitbit user hasn't
+        changed.
+        """
         file_info = self.get_current_files()
         target_file = None
         stored_data = defaultdict(dict)
@@ -353,39 +427,47 @@ class FitbitSource(BaseSource):
 
             stored_data = defaultdict(dict)
 
-            # Profile saved to check user ID, will be overwritten after.
+            storage_date = self._guess_storage_date(current_data)
+
+            # Profile saved to check user ID but should be overwritten later.
             if 'profile' in current_data:
                 stored_data['profile'] = current_data['profile']
 
-            # Retain all but the most recent year as stored yearly data.
+            # Copy in stored data older than STORAGE_MIN at time of storage.
             for url in [u for u in fitbit_urls if u['period'] == 'year']:
                 name = url['name']
-                current_years = [str(x) for x in current_data[name].keys()]
-                most_recent = str(max([
-                    arrow.get('{}-01'.format(y)) for y in current_years]).year)
-
-                assert most_recent in current_years
-                for year in current_years:
-                    if year == most_recent:
+                for year in current_data[name].keys():
+                    year_date = arrow.get('{}-01'.format(year))
+                    if storage_date - year_date.ceil('year') < STORAGE_MIN:
+                        logging.debug(
+                            'Skip loading "{}" storage, less than {} relative '
+                            'to guessed storage date "{}"'.format(
+                                year, STORAGE_MIN, storage_date))
                         continue
                     stored_data[name][year] = current_data[name][year]
-
-            # Retain all but the most recent month as stored monthly data.
             for url in [u for u in fitbit_urls if u['period'] == 'month']:
                 name = url['name']
-                current_months = current_data[name].keys()
-                most_recent = max([
-                    arrow.get(m) for m in current_months]).format('YYYY-MM')
-
-                assert most_recent in current_months
-                for month in current_months:
-                    if month == most_recent:
+                for month in current_data[name].keys():
+                    month_date = arrow.get(month)
+                    if storage_date - month_date.ceil('month') < STORAGE_MIN:
+                        logging.debug(
+                            'Skip loading "{}" storage, less than {} relative '
+                            'to guessed storage date "{}"'.format(
+                                month, STORAGE_MIN, storage_date))
                         continue
                     stored_data[name][month] = current_data[name][month]
 
         return stored_data
 
     def create_files(self):
+        """
+        Retrieve data and create fitbit data files.
+
+        If an API cap is encountered, skip file creation and instead return
+        a countdown. Data retrieval will be resubmitted, and when it runs again
+        it will use previously cached queries. (This iterates until all
+        queries can be completed.)
+        """
         filename = 'fitbit-data.json'
         filepath = os.path.join(self.temp_directory, filename)
 
@@ -397,7 +479,10 @@ class FitbitSource(BaseSource):
             }
         })
 
-        stored_data = self.load_existing_fitbit_data()
+        try:
+            stored_data = self.load_existing_fitbit_data()
+        except AttributeError:
+            stored_data = defaultdict(dict)
 
         try:
             fitbit_data = get_fitbit_data(self.access_token, self.oh_user_id,
@@ -443,4 +528,7 @@ class FitbitSource(BaseSource):
 
 
 if __name__ == '__main__':
+    """
+    Call the client method to run via the commpand line.
+    """
     FitbitSource.cli()
