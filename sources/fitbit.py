@@ -52,7 +52,8 @@ RespectfulRequester.configure(
     safety_threshold=5)
 
 requests = RespectfulRequester()
-requests.register_realm('fitbit', max_requests=3600, timespan=60)
+requests.register_realm('fitbit', max_requests=3600, timespan=3600)
+requests.update_realm('fitbit', max_requests=3600, timespan=3600)
 
 # Only use cached data if cached less than CACHE_MAX before now.
 # Cache target dates older than CACHE_MIN before now.
@@ -246,8 +247,9 @@ def get_fitbit_data(access_token, open_humans_id, fitbit_data):
 
     Result is a dict of all of the fitbit data.
     """
-    requests.register_realm('fitbit-{}'.format(open_humans_id),
-                            max_requests=150, timespan=60)
+    user_realm = 'fitbit-{}'.format(open_humans_id)
+    requests.register_realm(user_realm, max_requests=150, timespan=3600)
+    requests.update_realm(user_realm, max_requests=150, timespan=3600)
 
     query_result = fitbit_query(access_token=access_token,
                                 path='/-/profile.json',
