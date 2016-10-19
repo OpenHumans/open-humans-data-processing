@@ -236,6 +236,9 @@ class TwentyThreeAndMeSource(BaseSource):
     def same_orig_file(self, orig_file_hash):
         """
         Check hashed self.file_url path against stored orig_file_hash.
+
+        The path in an original source file URL are expected to be unique, as
+        we store them with a UUID.
         """
         if not self.file_url:
             return False
