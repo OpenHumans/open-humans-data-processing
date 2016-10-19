@@ -221,13 +221,16 @@ class TwentyThreeAndMeSource(BaseSource):
         the source file path for this task (from self.file_url).
         """
         if not files:
+            logger.info('Update needed for user "{}", source "{}": no current files available.'.format(self.oh_username, self.source))
             return True
         for file_data in files:
             try:
                 orig_file_hash = file_data['metadata']['orig_file_hash']
             except KeyError:
+                logger.info('Update needed for user "{}", source "{}": no hash stored for original file.'.format(self.oh_username, self.source))
                 return True
             if not self.same_orig_file(orig_file_hash):
+                logger.info('Update needed for user "{}", source "{}": hash mismatch for original file.'.format(self.oh_username, self.source))
                 return True
         logger.info('Update unnecessary for user "{}", source "{}".'.format(
             self.oh_username, self.source))
