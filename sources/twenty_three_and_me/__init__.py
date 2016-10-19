@@ -12,9 +12,13 @@ import logging
 import os
 import re
 import shutil
+import urlparse
 
 from cStringIO import StringIO
 from datetime import date, datetime
+
+import arrow
+import bcrypt
 
 from base_source import BaseSource
 
@@ -191,9 +195,11 @@ class TwentyThreeAndMeSource(BaseSource):
             if re.match(r'(rs|i)[0-9]+\t[1-9XYM][0-9T]?\t[0-9]+\t[ACGT\-ID][ACGT\-ID]?', next_line):
                 output.write(next_line)
             else:
-                bad_format = True
-
-                logger.warn('bad format: "%s"', next_line)
+                # Only report this type of format issue once.
+                if not bad_format:
+                    bad_format = True
+                    self.sentry_log('23andMe body did not conform to expected format.')
+                    logger.warn('Bad format: "%s"', next_line)
 
             try:
                 next_line = input_file.next()
@@ -205,6 +211,41 @@ class TwentyThreeAndMeSource(BaseSource):
 
         return output
 
+    def should_update(self, files):
+        """
+        Reprocess only if source file has changed.
+
+        We store a hash of the original filepath as metadata and check this.
+        Update is deemed unnecessary if (a) processed files exist, (b) they
+        have recorded orig_file_hash, (c) we verify these all match a hash of
+        the source file path for this task (from self.file_url).
+        """
+        if not files:
+            return True
+        for file_data in files:
+            try:
+                orig_file_hash = file_data['metadata']['orig_file_hash']
+            except KeyError:
+                return True
+            if not self.same_orig_file(orig_file_hash):
+                return True
+        logger.info('Update unnecessary for user "{}", source "{}".'.format(
+            self.oh_username, self.source))
+        return False
+
+    def same_orig_file(self, orig_file_hash):
+        """
+        Check hashed self.file_url path against stored orig_file_hash.
+
+        The path in an original source file URL are expected to be unique, as
+        we store them with a UUID.
+        """
+        if not self.file_url:
+            return False
+        url_path = str(urlparse.urlparse(self.file_url).path)
+        new_hash = bcrypt.hashpw(url_path, str(orig_file_hash))
+        return orig_file_hash == new_hash
+
     def create_files(self):
         """
         Create Open Humans Dataset from uploaded 23andme full genotyping data
@@ -215,6 +256,11 @@ class TwentyThreeAndMeSource(BaseSource):
         """
         if not self.input_file:
             raise Exception('Run with either input_file or file_url')
+
+        new_hash = ''
+        if self.file_url:
+            orig_path = urlparse.urlparse(self.file_url).path
+            new_hash = bcrypt.hashpw(str(orig_path), bcrypt.gensalt())
 
         filename_base = '23andMe-genotyping'
 
@@ -236,6 +282,8 @@ class TwentyThreeAndMeSource(BaseSource):
                     'description':
                         '23andMe full genotyping data, original format',
                     'tags': ['23andMe', 'genotyping'],
+                    'orig_file_hash': new_hash,
+                    'creation_date': arrow.get().format(),
                 },
             })
 
@@ -252,5 +300,7 @@ class TwentyThreeAndMeSource(BaseSource):
                 'metadata': {
                     'description': '23andMe full genotyping data, VCF format',
                     'tags': ['23andMe', 'genotyping', 'vcf'],
+                    'orig_file_hash': new_hash,
+                    'creation_date': arrow.get().format(),
                 },
             })

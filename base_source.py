@@ -6,10 +6,12 @@ import os
 import re
 import shutil
 import tempfile
+import urlparse
 import zipfile
 
 from urlparse import urljoin, urlsplit
 
+import bcrypt
 import click
 import requests
 
@@ -126,6 +128,9 @@ class BaseSource(object):
                 'output_directory or S3 parameters must be provided')
 
     def coerce_file(self):
+        """
+        Map remote file URLs into a local input file, if necessary.
+        """
         if self.file_url and self.input_file:
             raise Exception('Run with input_file or file_url, not both')
         elif self.file_url and not self.input_file:
@@ -142,6 +147,7 @@ class BaseSource(object):
             zip_files = self.filter_archive(zip_file)
 
             if len(zip_files) != 1:
+                self.sentry_log(error_message)
                 raise ValueError(error_message)
 
             return zip_file.open(zip_files[0])
@@ -152,6 +158,7 @@ class BaseSource(object):
         elif self.input_file.endswith('.txt'):
             return open(self.input_file)
 
+        self.sentry_log(error_message)
         raise ValueError(error_message)
 
     @staticmethod
@@ -160,7 +167,7 @@ class BaseSource(object):
                 if not f.startswith('__MACOSX/')]
 
     def sentry_log(self, message):
-        message += ' Username: "{}"'.format(self.oh_username)
+        message += ' Username: "{}", Source: "{}"'.format(self.oh_username, self.source)
 
         logger.warn(message)
 
@@ -212,8 +219,7 @@ class BaseSource(object):
 
         return specified_filename
 
-    @staticmethod
-    def should_update(files):
+    def should_update(self, files):
         """
         Sources should override this method and return True if the member's
         source data needs updating.
@@ -290,11 +296,11 @@ class BaseSource(object):
                                  method='post')
 
     def run(self):
-        if not self.should_update(self.get_current_files()) and not self.force:
-            return
-
         if not self.local:
             self.update_parameters()
+
+        if not self.should_update(self.get_current_files()) and not self.force:
+            return
 
         self.coerce_file()
         self.validate_parameters()
