@@ -129,11 +129,7 @@ class BaseSource(object):
 
     def coerce_file(self):
         """
-        Map remote file URLs into a local input file.
-
-        Also hash of the original filepath for remote files. This can
-        be stored as metadata in output files, then used to help determine
-        when reprocessing should be performed in the future.
+        Map remote file URLs into a local input file, if necessary.
         """
         if self.file_url and self.input_file:
             raise Exception('Run with input_file or file_url, not both')
