@@ -187,7 +187,7 @@ def source_task(name, **kwargs):
 
 
 def generic_handler(name):
-    logging.info('POST JSON: %s', debug_json(request.json))
+    logging.debug('POST JSON: %s', debug_json(request.json))
 
     source_task.delay(name, **request.json)
 

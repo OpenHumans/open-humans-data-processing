@@ -6,18 +6,18 @@ import os
 import re
 import shutil
 import tempfile
-import urlparse
 import zipfile
 
 from urlparse import urljoin, urlsplit
 
-import bcrypt
 import click
 import requests
 
 from data_retrieval.files import copy_file_to_s3
 
 logger = logging.getLogger(__name__)
+
+DEBUG = os.getenv('DEBUG', False)
 
 # Used to authenticate data-processing to open-humans (and the inverse); must
 # be set in the environment on both sides
@@ -335,7 +335,7 @@ class BaseSource(object):
         @click.option('-f', '--force', is_flag=True, default=False)
         @click.option('-l', '--local', is_flag=True, default=True)
         def base_cli(**kwargs):
-            logging.basicConfig(level=logging.DEBUG)
+            logging.basicConfig(level=logging.DEBUG if DEBUG else logging.INFO)
 
             source = cls(**kwargs)
             source.run_cli()
