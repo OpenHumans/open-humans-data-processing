@@ -17,7 +17,9 @@ from data_retrieval.files import copy_file_to_s3
 
 logger = logging.getLogger(__name__)
 
-DEBUG = os.getenv('DEBUG', False)
+# DEBUG is True unless DEBUG environment variable is 'False'
+DEBUG_ENV = os.getenv('DEBUG')
+DEBUG = False if DEBUG_ENV and DEBUG_ENV.lower() == 'false' else True
 
 # Used to authenticate data-processing to open-humans (and the inverse); must
 # be set in the environment on both sides

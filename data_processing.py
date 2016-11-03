@@ -28,7 +28,9 @@ from models import db
 
 app = Flask(__name__)
 
-DEBUG = os.getenv('DEBUG', False)
+# DEBUG is True unless DEBUG environment variable is 'False'
+DEBUG_ENV = os.getenv('DEBUG', 'True')
+DEBUG = False if DEBUG_ENV and DEBUG_ENV.lower() == 'false' else True
 
 # A mapping of name/source argument pairs to send to the create_files
 # method
@@ -77,8 +79,7 @@ def after_setup_logger_cb(logger, **kwargs):
     """
     Update the Celery logger's level.
     """
-    if DEBUG:
-        logger.setLevel(logging.DEBUG)
+    logger.setLevel(logging.DEBUG) if DEBUG else logger.setLevel(logging.INFO)
 
 
 def trunc_strings(obj, chars=300):
