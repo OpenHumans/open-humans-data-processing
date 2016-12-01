@@ -271,15 +271,16 @@ class AncestryDNASource(BaseSource):
 
                 output.write(next_line)
             else:
-                bad_format = True
-                print 'BAD FORMAT:\n{}'.format(next_line)
+                # Only report this type of format issue once.
+                if not bad_format:
+                    bad_format = True
+                    self.sentry_log('AncestryDNA body did not conform to expected format.')
+                    logger.warn('Bad format: "%s"', next_line)
+
             try:
                 next_line = inputfile.next()
             except StopIteration:
                 next_line = None
-
-        if bad_format:
-            self.sentry_log('AncestryDNA body did not conform to expected format.')
 
         if called_Y * 1.0 / reported_Y > 0.5:
             genome_sex = 'Male'
