@@ -8,6 +8,7 @@ see LICENSE.TXT for full license text.
 """
 
 import json
+import logging
 import os
 import re
 import shutil
@@ -17,6 +18,8 @@ import requests
 from bs4 import BeautifulSoup
 
 from base_source import BaseSource
+
+logger = logging.getLogger(__name__)
 
 SURVEYID_TO_SAMPACC_FILE = os.path.join(
     os.path.dirname(__file__),
@@ -234,12 +237,35 @@ class AmericanGutSource(BaseSource):
             }
         })
 
+    def archive_files(self):
+        confirmed_filenames = [fi['basename'] for fi in
+                               self.confirmed_current_files]
+        unconfirmed_files = [fi for fi in self.get_current_files() if
+                             fi['basename'] not in confirmed_filenames]
+
+        logger.info('confirmed files -- don\'t remove: {}'.format(
+            [fi['basename'] for fi in self.confirmed_current_files]))
+        logger.info('unconfirmed files -- remove: {}'.format(
+            [fi['basename'] for fi in unconfirmed_files]))
+
+        if unconfirmed_files:
+            response = self.open_humans_request(
+                url=self.archive_url,
+                data={'data_file_ids': [data_file['id']
+                                        for data_file in unconfirmed_files]},
+                method='post')
+
+            logger.info('remove files with IDs: "%s"', response.json()['ids'])
+
     def create_files(self):
         # For mapping survey IDs to sample accessions.
         with open(SURVEYID_TO_SAMPACC_FILE) as filedata:
             surveyid_to_sampacc = json.loads(''.join(filedata.readlines()))
 
-        for survey_id in self.survey_ids:
+        current_files = self.get_current_files()
+        self.confirmed_current_files = []
+
+        for survey_id in self.data['surveyIds']:
             if survey_id not in surveyid_to_sampacc:
                 # If we can't match the survey ID to sample accession, the data
                 # isn't yet available in ENA. This situation might arise if the
@@ -253,6 +279,15 @@ class AmericanGutSource(BaseSource):
 
             for sampleacc in surveyid_to_sampacc[survey_id]:
                 filename_base = 'American-Gut-{}'.format(sampleacc)
+
+                already_done = False
+                for fileinfo in current_files:
+                    if fileinfo['basename'].startswith(filename_base):
+                        already_done = True
+                        logger.debug('Skipping {}'.format(filename_base))
+                        self.confirmed_current_files.append(fileinfo)
+                if already_done:
+                    continue
 
                 # Get ENA information. Describes repository items and
                 # accessions.
