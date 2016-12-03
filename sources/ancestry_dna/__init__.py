@@ -210,19 +210,28 @@ class AncestryDNASource(BaseSource):
         if re.match(re_converter_version, header_converter_version):
             output.write(header_converter_version)
 
-        expected_p1 = [
+        header_v1 = [
             "#Below is a text version of your DNA file from Ancestry.com DNA, LLC.  THIS \r\n",
             "#INFORMATION IS FOR YOUR PERSONAL USE AND IS INTENDED FOR GENEALOGICAL RESEARCH \r\n",
             "#ONLY.  IT IS NOT INTENDED FOR MEDICAL OR HEALTH PURPOSES.  THE EXPORTED DATA IS \r\n",
             "#SUBJECT TO THE AncestryDNA TERMS AND CONDITIONS, BUT PLEASE BE AWARE THAT THE \r\n",
             "#DOWNLOADED DATA WILL NO LONGER BE PROTECTED BY OUR SECURITY MEASURES.\r\n"
+            "#\r\n",
+            "#Genetic data is provided below as five TAB delimited columns.  Each line \r\n",
+            "#corresponds to a SNP.  Column one provides the SNP identifier (rsID where \r\n",
+            "#possible).  Columns two and three contain the chromosome and basepair position \r\n",
+            "#of the SNP using human reference build 37.1 coordinates.  Columns four and five \r\n",
+            "#contain the two alleles observed at this SNP (genotype).  The genotype is reported \r\n",
+            "#on the forward (+) strand with respect to the human reference.\r\n",
         ]
-        expected_p2a = []
-        expected_p2b = [
+        header_v2 = [
+            "#Below is a text version of your DNA file from Ancestry.com DNA, LLC.  THIS \r\n",
+            "#INFORMATION IS FOR YOUR PERSONAL USE AND IS INTENDED FOR GENEALOGICAL RESEARCH \r\n",
+            "#ONLY.  IT IS NOT INTENDED FOR MEDICAL, DIAGNOSTIC, OR HEALTH PURPOSES.  THE EXPORTED DATA IS \r\n",
+            "#SUBJECT TO THE AncestryDNA TERMS AND CONDITIONS, BUT PLEASE BE AWARE THAT THE \r\n",
+            "#DOWNLOADED DATA WILL NO LONGER BE PROTECTED BY OUR SECURITY MEASURES.\r\n",
             "#WHEN YOU DOWNLOAD YOUR RAW DNA DATA, YOU ASSUME ALL RISK OF STORING, \r\n",
             "#SECURING AND PROTECTING YOUR DATA.  FOR MORE INFORMATION, SEE ANCESTRYDNA FAQS. \r\n",
-        ]
-        expected_p3 = [
             "#\r\n",
             "#Genetic data is provided below as five TAB delimited columns.  Each line \r\n",
             "#corresponds to a SNP.  Column one provides the SNP identifier (rsID where \r\n",
@@ -239,8 +248,6 @@ class AncestryDNASource(BaseSource):
             header_p_lines.append(next_line)
             next_line = inputfile.next()
 
-        header_v1 = expected_p1 + expected_p2a + expected_p3
-        header_v2 = expected_p1 + expected_p2b + expected_p3
         if len(header_p_lines) == len(header_v1) and all([
                 header_v1[i] == header_p_lines[i] for i in
                 range(len(header_v1))]):
