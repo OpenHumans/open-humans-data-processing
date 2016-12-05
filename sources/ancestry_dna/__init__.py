@@ -34,6 +34,53 @@ REFERENCE_GENOME_URL = ('http://hgdownload-test.cse.ucsc.edu/' +
 VCF_FIELDS = ['CHROM', 'POS', 'ID', 'REF', 'ALT', 'QUAL', 'FILTER',
               'INFO', 'FORMAT', 'ANCESTRYDNA_DATA']
 
+HEADER_V1 = [
+    "#Below is a text version of your DNA file from Ancestry.com DNA, LLC.  THIS \r\n",
+    "#INFORMATION IS FOR YOUR PERSONAL USE AND IS INTENDED FOR GENEALOGICAL RESEARCH \r\n",
+    "#ONLY.  IT IS NOT INTENDED FOR MEDICAL OR HEALTH PURPOSES.  THE EXPORTED DATA IS \r\n",
+    "#SUBJECT TO THE AncestryDNA TERMS AND CONDITIONS, BUT PLEASE BE AWARE THAT THE \r\n",
+    "#DOWNLOADED DATA WILL NO LONGER BE PROTECTED BY OUR SECURITY MEASURES.\r\n"
+    "#\r\n",
+    "#Genetic data is provided below as five TAB delimited columns.  Each line \r\n",
+    "#corresponds to a SNP.  Column one provides the SNP identifier (rsID where \r\n",
+    "#possible).  Columns two and three contain the chromosome and basepair position \r\n",
+    "#of the SNP using human reference build 37.1 coordinates.  Columns four and five \r\n",
+    "#contain the two alleles observed at this SNP (genotype).  The genotype is reported \r\n",
+    "#on the forward (+) strand with respect to the human reference.\r\n",
+]
+HEADER_V2 = [
+    "#Below is a text version of your DNA file from Ancestry.com DNA, LLC.  THIS \r\n",
+    "#INFORMATION IS FOR YOUR PERSONAL USE AND IS INTENDED FOR GENEALOGICAL RESEARCH \r\n",
+    "#ONLY.  IT IS NOT INTENDED FOR MEDICAL OR HEALTH PURPOSES.  THE EXPORTED DATA IS \r\n",
+    "#SUBJECT TO THE AncestryDNA TERMS AND CONDITIONS, BUT PLEASE BE AWARE THAT THE \r\n",
+    "#DOWNLOADED DATA WILL NO LONGER BE PROTECTED BY OUR SECURITY MEASURES.\r\n",
+    "#WHEN YOU DOWNLOAD YOUR RAW DNA DATA, YOU ASSUME ALL RISK OF STORING, \r\n",
+    "#SECURING AND PROTECTING YOUR DATA.  FOR MORE INFORMATION, SEE ANCESTRYDNA FAQS. \r\n",
+    "#\r\n",
+    "#Genetic data is provided below as five TAB delimited columns.  Each line \r\n",
+    "#corresponds to a SNP.  Column one provides the SNP identifier (rsID where \r\n",
+    "#possible).  Columns two and three contain the chromosome and basepair position \r\n",
+    "#of the SNP using human reference build 37.1 coordinates.  Columns four and five \r\n",
+    "#contain the two alleles observed at this SNP (genotype).  The genotype is reported \r\n",
+    "#on the forward (+) strand with respect to the human reference.\r\n",
+]
+HEADER_V3 = [
+    "#Below is a text version of your DNA file from Ancestry.com DNA, LLC.  THIS \r\n",
+    "#INFORMATION IS FOR YOUR PERSONAL USE AND IS INTENDED FOR GENEALOGICAL RESEARCH \r\n",
+    "#ONLY.  IT IS NOT INTENDED FOR MEDICAL, DIAGNOSTIC, OR HEALTH PURPOSES.  THE EXPORTED DATA IS \r\n",
+    "#SUBJECT TO THE AncestryDNA TERMS AND CONDITIONS, BUT PLEASE BE AWARE THAT THE \r\n",
+    "#DOWNLOADED DATA WILL NO LONGER BE PROTECTED BY OUR SECURITY MEASURES.\r\n",
+    "#WHEN YOU DOWNLOAD YOUR RAW DNA DATA, YOU ASSUME ALL RISK OF STORING, \r\n",
+    "#SECURING AND PROTECTING YOUR DATA.  FOR MORE INFORMATION, SEE ANCESTRYDNA FAQS. \r\n",
+    "#\r\n",
+    "#Genetic data is provided below as five TAB delimited columns.  Each line \r\n",
+    "#corresponds to a SNP.  Column one provides the SNP identifier (rsID where \r\n",
+    "#possible).  Columns two and three contain the chromosome and basepair position \r\n",
+    "#of the SNP using human reference build 37.1 coordinates.  Columns four and five \r\n",
+    "#contain the two alleles observed at this SNP (genotype).  The genotype is reported \r\n",
+    "#on the forward (+) strand with respect to the human reference.\r\n",
+]
+
 # The only non-commented-out header line. We want to ignore it.
 EXPECTED_COLUMNS_HEADER = 'rsid\tchromosome\tposition\tallele1\tallele2\r\n'
 
@@ -166,6 +213,18 @@ class AncestryDNASource(BaseSource):
     """
     source = 'ancestry_dna'
 
+    def check_header_lines(self, input_lines, header_lines, header_name):
+        if not len(input_lines) == len(header_lines):
+            if header_name:
+                logger.debug("Header line count != {}".format(header_name))
+            return False
+        matched_lines = [
+            header_lines[i] == input_lines[i] for i in range(len(header_lines))]
+        if header_name:
+            logger.debug("Header line matching for {}: {}".format(
+                header_name, matched_lines))
+        return all(matched_lines)
+
     def clean_raw_ancestrydna(self):
         """
         Create clean file in AncestryDNA format from downloaded version
@@ -210,37 +269,6 @@ class AncestryDNASource(BaseSource):
         if re.match(re_converter_version, header_converter_version):
             output.write(header_converter_version)
 
-        header_v1 = [
-            "#Below is a text version of your DNA file from Ancestry.com DNA, LLC.  THIS \r\n",
-            "#INFORMATION IS FOR YOUR PERSONAL USE AND IS INTENDED FOR GENEALOGICAL RESEARCH \r\n",
-            "#ONLY.  IT IS NOT INTENDED FOR MEDICAL OR HEALTH PURPOSES.  THE EXPORTED DATA IS \r\n",
-            "#SUBJECT TO THE AncestryDNA TERMS AND CONDITIONS, BUT PLEASE BE AWARE THAT THE \r\n",
-            "#DOWNLOADED DATA WILL NO LONGER BE PROTECTED BY OUR SECURITY MEASURES.\r\n"
-            "#\r\n",
-            "#Genetic data is provided below as five TAB delimited columns.  Each line \r\n",
-            "#corresponds to a SNP.  Column one provides the SNP identifier (rsID where \r\n",
-            "#possible).  Columns two and three contain the chromosome and basepair position \r\n",
-            "#of the SNP using human reference build 37.1 coordinates.  Columns four and five \r\n",
-            "#contain the two alleles observed at this SNP (genotype).  The genotype is reported \r\n",
-            "#on the forward (+) strand with respect to the human reference.\r\n",
-        ]
-        header_v2 = [
-            "#Below is a text version of your DNA file from Ancestry.com DNA, LLC.  THIS \r\n",
-            "#INFORMATION IS FOR YOUR PERSONAL USE AND IS INTENDED FOR GENEALOGICAL RESEARCH \r\n",
-            "#ONLY.  IT IS NOT INTENDED FOR MEDICAL, DIAGNOSTIC, OR HEALTH PURPOSES.  THE EXPORTED DATA IS \r\n",
-            "#SUBJECT TO THE AncestryDNA TERMS AND CONDITIONS, BUT PLEASE BE AWARE THAT THE \r\n",
-            "#DOWNLOADED DATA WILL NO LONGER BE PROTECTED BY OUR SECURITY MEASURES.\r\n",
-            "#WHEN YOU DOWNLOAD YOUR RAW DNA DATA, YOU ASSUME ALL RISK OF STORING, \r\n",
-            "#SECURING AND PROTECTING YOUR DATA.  FOR MORE INFORMATION, SEE ANCESTRYDNA FAQS. \r\n",
-            "#\r\n",
-            "#Genetic data is provided below as five TAB delimited columns.  Each line \r\n",
-            "#corresponds to a SNP.  Column one provides the SNP identifier (rsID where \r\n",
-            "#possible).  Columns two and three contain the chromosome and basepair position \r\n",
-            "#of the SNP using human reference build 37.1 coordinates.  Columns four and five \r\n",
-            "#contain the two alleles observed at this SNP (genotype).  The genotype is reported \r\n",
-            "#on the forward (+) strand with respect to the human reference.\r\n",
-        ]
-
         next_line = inputfile.next()
         header_p_lines = []
 
@@ -248,18 +276,17 @@ class AncestryDNASource(BaseSource):
             header_p_lines.append(next_line)
             next_line = inputfile.next()
 
-        if len(header_p_lines) == len(header_v1) and all([
-                header_v1[i] == header_p_lines[i] for i in
-                range(len(header_v1))]):
-            for line in header_v1:
+        if self.check_header_lines(header_p_lines, HEADER_V1, 'HEADER_V1'):
+            for line in HEADER_V1:
                 output.write(line)
-        elif len(header_p_lines) == len(header_v2) and all([
-                header_v2[i] == header_p_lines[i] for i in
-                range(len(header_v2))]):
-            for line in header_v2:
+        elif self.check_header_lines(header_p_lines, HEADER_V2, 'HEADER_V2'):
+            for line in HEADER_V2:
+                output.write(line)
+        elif self.check_header_lines(header_p_lines, HEADER_V3, 'HEADER_V3'):
+            for line in HEADER_V3:
                 output.write(line)
         else:
-            self.sentry_log("AncestryDNA header didn't match expected format.")
+            self.sentry_log("AncestryDNA header didn't match expected formats")
 
         data_header = next_line
         if data_header == EXPECTED_COLUMNS_HEADER:
