@@ -79,9 +79,11 @@ fitbit_urls = [
     {'name': 'heart',
      'url': '/{user_id}/activities/heart/date/{start_date}/{end_date}.json',
      'period': 'month'},
+    # MPB 2016-12-12: Although docs allowed for 'year' for this endpoint,
+    # switched to 'month' bc/ req for full year started resulting in 504.
     {'name': 'tracker-activity-calories',
      'url': '/{user_id}/activities/tracker/activityCalories/date/{start_date}/{end_date}.json',
-     'period': 'year'},
+     'period': 'month'},
     {'name': 'tracker-calories',
      'url': '/{user_id}/activities/tracker/calories/date/{start_date}/{end_date}.json',
      'period': 'year'},
