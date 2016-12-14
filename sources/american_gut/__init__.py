@@ -13,9 +13,9 @@ import os
 import re
 import shutil
 
-import requests
-
+import arrow
 from bs4 import BeautifulSoup
+import requests
 
 from base_source import BaseSource
 
@@ -238,24 +238,35 @@ class AmericanGutSource(BaseSource):
         })
 
     def archive_files(self):
-        confirmed_filenames = [fi['basename'] for fi in
-                               self.confirmed_current_files]
-        unconfirmed_files = [fi for fi in self.get_current_files() if
-                             fi['basename'] not in confirmed_filenames]
+        current_files = self.get_current_files()
 
-        logger.info('confirmed files -- don\'t remove: {}'.format(
-            [fi['basename'] for fi in self.confirmed_current_files]))
-        logger.info('unconfirmed files -- remove: {}'.format(
-            [fi['basename'] for fi in unconfirmed_files]))
+        # Keep the most recent file matching each confirmed filename.
+        files_to_keep = dict()
+        for fileinfo in current_files:
+            if fileinfo['basename'] not in self.conf_curr_filenames:
+                continue
+            if fileinfo['basename'] in files_to_keep:
+                if (arrow.get(files_to_keep[fileinfo['basename']]['created']) <
+                        arrow.get(fileinfo['created'])):
+                    files_to_keep[fileinfo['basename']] = fileinfo
+                else:
+                    continue
+            else:
+                files_to_keep[fileinfo['basename']] = fileinfo
+        ids_to_keep = [files_to_keep[bn]['id'] for bn in files_to_keep.keys()]
+        ids_to_remove = [fi['id'] for fi in current_files if
+                         fi['id'] not in ids_to_keep]
 
-        if unconfirmed_files:
+        if ids_to_keep:
+            logger.info('Retaining files with IDs: "%s"', ids_to_keep)
+
+        if ids_to_remove:
             response = self.open_humans_request(
                 url=self.archive_url,
-                data={'data_file_ids': [data_file['id']
-                                        for data_file in unconfirmed_files]},
+                data={'data_file_ids': ids_to_remove},
                 method='post')
 
-            logger.info('remove files with IDs: "%s"', response.json()['ids'])
+            logger.info('Removed files with IDs: "%s"', response.json()['ids'])
 
     def create_files(self):
         # For mapping survey IDs to sample accessions.
@@ -263,7 +274,7 @@ class AmericanGutSource(BaseSource):
             surveyid_to_sampacc = json.loads(''.join(filedata.readlines()))
 
         current_files = self.get_current_files()
-        self.confirmed_current_files = []
+        self.conf_curr_filenames = []
 
         for survey_id in self.data['surveyIds']:
             if survey_id not in surveyid_to_sampacc:
@@ -285,7 +296,7 @@ class AmericanGutSource(BaseSource):
                     if fileinfo['basename'].startswith(filename_base):
                         already_done = True
                         logger.debug('Skipping {}'.format(filename_base))
-                        self.confirmed_current_files.append(fileinfo)
+                        self.conf_curr_filenames.append(fileinfo['basename'])
                 if already_done:
                     continue
 
