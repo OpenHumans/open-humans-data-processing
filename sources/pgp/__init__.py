@@ -45,6 +45,12 @@ class PGPSource(BaseSource):
 
     source = 'pgp'
 
+
+    def __init__(self, *args, **kwargs):
+        if 'hu_id' in kwargs:
+            self.hu_id = kwargs['hu_id']
+        super(PGPSource, self).__init__(*args, **kwargs)
+
     @staticmethod
     def parse_uploaded_div(profile_soup):
         """
