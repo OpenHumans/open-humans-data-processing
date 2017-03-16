@@ -306,6 +306,8 @@ class PGPSource(BaseSource):
             self.handle_var_file(filename, source, **kwargs)
         elif re.search(r'^masterVarBeta-[^/]*.tsv.bz2', filename):
             self.handle_mastervarbeta_file(filename, source, **kwargs)
+        elif re.search(r'^GS00253-DNA[^/]*.tsv.bz2', filename):
+            self.handle_var_file(filename, source, **kwargs)
         else:
             # We've had one case of an old file not matching standard name
             # format.  For this person there is a more recent file, so we'll
