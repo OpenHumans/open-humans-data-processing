@@ -1,25 +1,20 @@
 """
 RunKeeper data processing.
 
-Copyright (C) 2015 PersonalGenomes.org
+Copyright (C) 2015-2017 Open Humans Foundation
 
 This software is shared under the "MIT License" license (aka "Expat License"),
 see LICENSE.TXT for full license text.
 
 May be used on the command line from this project's base directory, e.g.
 
-   python -m sources.runkeeper [accesstoken] files
+   python -m sources.runkeeper -o FILEDIR -d USERID -a ACCESSTOKEN
 
-...where [accesstoken] is the private token RunKeeper's API has created that
-grants permission to access a user's data. (Keep it safe!) This will assemble
-data sets for the user at:
+This will assemble data sets for the user, e.g.:
 
-   files/RunKeeper_individual-12345678_activity-data_20150102T030405Z.tar.gz
-   files/RunKeeper_individual-12345678_social-data_20150102T030405Z.tar.gz
-   files/RunKeeper_individual-12345678_sleep-data_20150102T030405Z.tar.gz
+   files/Runkeeper-activity-data-2016.json
+   files/Runkeeper-activity-data-2017.json
 
-(These filenames include an example user ID, "12345678", and an example
-datetime stamp, "January 2rd 2015 3:04:05am".)
 """
 
 from __future__ import unicode_literals
