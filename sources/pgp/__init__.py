@@ -20,11 +20,14 @@ May be used on the command line from this project's base directory, e.g.
 (These filenames includes a datetime stamp, January 2rd 2016 3:04:05am UTC.)
 """
 
+import datetime
 import json
+import logging
 import os
 import re
 import shutil
 
+import arrow
 import cgivar2gvcf
 import requests
 
@@ -32,8 +35,11 @@ from bs4 import BeautifulSoup
 
 from base_source import BaseSource
 
+logger = logging.getLogger(__name__)
+
 BASE_URL = 'https://my.pgp-hms.org'
 
+REFRESH_DAYS = 180
 
 class PGPSource(BaseSource):
     """
@@ -45,11 +51,30 @@ class PGPSource(BaseSource):
 
     source = 'pgp'
 
-
     def __init__(self, *args, **kwargs):
         if 'hu_id' in kwargs:
             self.hu_id = kwargs['hu_id']
         super(PGPSource, self).__init__(*args, **kwargs)
+
+    def should_update(self, files):
+        update = False
+        file_links, survey_data, profile_url = self.parse_pgp_profile_page()
+        source_urls = [x['link'] for x in file_links]
+        for item in files:
+            if 'survey' in item['metadata']['tags']:
+                timedelta = arrow.get() - arrow.get(item['created'])
+                if timedelta > datetime.timedelta(days=REFRESH_DAYS):
+                    update = True
+            elif 'sourceURL' in item['metadata']:
+                if item['metadata']['sourceURL'] not in source_urls:
+                    update = True
+        if update:
+            logger.info('Updating PGP data for {} (user id: {})...'.format(
+                self.oh_username, self.oh_user_id))
+        else:
+            logger.info('No PGP update needed for {} (user id: {}).'.format(
+                self.oh_username, self.oh_user_id))
+        return update
 
     @staticmethod
     def parse_uploaded_div(profile_soup):
