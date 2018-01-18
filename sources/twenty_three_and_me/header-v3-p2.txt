@@ -1,0 +1,5 @@
+# 
+# More information on reference human assembly build 37 (aka Annotation Release 104):
+# http://www.ncbi.nlm.nih.gov/mapview/map_search.cgi?taxid=9606
+#
+# rsid	chromosome	position	genotype

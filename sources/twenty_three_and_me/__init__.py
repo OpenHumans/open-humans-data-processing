@@ -172,6 +172,8 @@ class TwentyThreeAndMeSource(BaseSource):
 
         header_v1 = open(os.path.join(cwd, 'header-v1.txt'), 'r').read()
         header_v2 = open(os.path.join(cwd, 'header-v2.txt'), 'r').read()
+        header_v3_p1 = open(os.path.join(cwd, 'header-v3-p1.txt'), 'r').read()
+        header_v3_p2 = open(os.path.join(cwd, 'header-v3-p2.txt'), 'r').read()
 
         header_lines = ''
 
@@ -185,6 +187,11 @@ class TwentyThreeAndMeSource(BaseSource):
         if (header_lines.splitlines() == header_v1.splitlines() or
                 header_lines.splitlines() == header_v2.splitlines()):
             output.write(header_lines)
+        elif (header_lines.splitlines()[:13] == header_v3_p1.splitlines() and
+              header_lines.splitlines()[-5:] == header_v3_p2.splitlines()):
+            output.write(header_v3_p1)
+            output.write('# [URL REDACTED]\n')
+            output.write(header_v3_p2)
         else:
             self.sentry_log(
                 '23andMe header did not conform to expected format.')
